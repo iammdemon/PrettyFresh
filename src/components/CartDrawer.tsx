@@ -3,6 +3,7 @@
 import React from "react";
 import { useCart } from "@/context/CartContext";
 import { X, ShoppingBasket, Trash2, CreditCard } from "lucide-react";
+import { toBanglaPrice, toBanglaNumber } from "@/lib/bangla";
 
 export const CartDrawer: React.FC = () => {
     const {
@@ -49,7 +50,7 @@ export const CartDrawer: React.FC = () => {
                 aria-label="Shopping Cart"
             >
                 <div className="cart-drawer-header">
-                    <h3>My Shopping Cart ({totalItems})</h3>
+                    <h3>My Shopping Cart ({toBanglaNumber(totalItems)})</h3>
                     <button className="close-cart-btn" onClick={handleClose} aria-label="Close cart">
                         <X />
                     </button>
@@ -73,7 +74,7 @@ export const CartDrawer: React.FC = () => {
                                     <div className="cart-item-details">
                                         <h4 className="cart-item-name">{item.name}</h4>
                                         <span className="cart-item-weight">{item.weight}</span>
-                                        <span className="cart-item-price">${(item.price * item.quantity).toFixed(2)}</span>
+                                        <span className="cart-item-price">{toBanglaPrice(item.price * item.quantity)}</span>
                                         <div className="cart-item-controls" style={{ marginTop: "8px" }}>
                                             <button 
                                                 className="cart-control-btn"
@@ -81,7 +82,7 @@ export const CartDrawer: React.FC = () => {
                                             >
                                                 -
                                             </button>
-                                            <span className="cart-qty-value">{item.quantity}</span>
+                                            <span className="cart-qty-value">{toBanglaNumber(item.quantity)}</span>
                                             <button 
                                                 className="cart-control-btn"
                                                 onClick={() => updateQuantity(index, 1)}
@@ -107,16 +108,16 @@ export const CartDrawer: React.FC = () => {
                     <div className="cart-drawer-footer">
                         <div className="subtotal-row">
                             <span>Subtotal:</span>
-                            <span className="subtotal-amount">${subtotal.toFixed(2)}</span>
+                            <span className="subtotal-amount">{toBanglaPrice(subtotal)}</span>
                         </div>
                         <div className="delivery-row">
                             <span>Delivery Charge:</span>
-                            <span className="delivery-charge">${deliveryCharge.toFixed(2)}</span>
+                            <span className="delivery-charge">{toBanglaPrice(deliveryCharge)}</span>
                         </div>
                         <hr className="cart-divider" />
                         <div className="total-row">
                             <span>Estimated Total:</span>
-                            <span className="total-amount">${total.toFixed(2)}</span>
+                            <span className="total-amount">{toBanglaPrice(total)}</span>
                         </div>
                         
                         <button className="btn btn-primary btn-block" onClick={checkout}>

@@ -25,7 +25,7 @@ export const Newsletter: React.FC = () => {
                         <Mail className="mail-icon" size={48} />
                         <h2 className="newsletter-title">Get Exclusive Deals & Weekly Discounts</h2>
                         <p className="newsletter-subtitle">
-                            Subscribe to our newsletter and get <strong>$10 discount</strong> on your first grocery delivery order.
+                            Subscribe to our newsletter and get <strong>৳১০০ discount</strong> on your first grocery delivery order.
                         </p>
                         
                         <form className="newsletter-form" onSubmit={handleSubmit}>

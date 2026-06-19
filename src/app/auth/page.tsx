@@ -56,10 +56,32 @@ export default function AuthPage() {
 
     const handleLoginContinue = (phone: string) => {
         setMobileNumber(phone);
-        navigateTo("otp");
+        // OTP is disabled, so mobile login proceeds directly to register (as a new flow)
+        navigateTo("register");
     };
 
-    const handleRegisterContinue = (data: { name: string; phone: string; email: string }) => {
+    const handleLoginSuccess = (userData: any) => {
+        if (typeof window !== "undefined") {
+            localStorage.setItem("prettyfresh_user", JSON.stringify(userData));
+        }
+        // Redirect directly to the dashboard
+        window.location.href = "/dashboard";
+    };
+
+    const handleForgotContinue = (phone: string) => {
+        if (typeof window !== "undefined") {
+            const toast = document.getElementById("toast-notif");
+            const toastMsg = toast?.querySelector(".toast-message");
+            if (toast && toastMsg) {
+                toastMsg.textContent = `Reset link sent to +880 ${phone}`;
+                toast.classList.add("active");
+                setTimeout(() => toast.classList.remove("active"), 3000);
+            }
+        }
+        navigateTo("login");
+    };
+
+    const handleRegisterContinue = (data: { name: string; phone: string; email: string; password?: string }) => {
         setName(data.name);
         setMobileNumber(data.phone);
         setEmail(data.email);
@@ -73,8 +95,35 @@ export default function AuthPage() {
         navigateTo("address");
     };
 
-    const handleAddressContinue = (fullAddress: string) => {
+    const handleAddressContinue = async (fullAddress: string) => {
         setAddress(fullAddress);
+        
+        // Save the completed session user data to localStorage
+        const userData = {
+            name: name || "PrettyFresh Member",
+            email: email || "member@prettyfresh.com",
+            phone: mobileNumber || "",
+            avatar: avatar || "/assets/default-avatar.png",
+            gender: gender || "Not Specified",
+            dob: dob || "",
+            address: fullAddress,
+            provider: "Email & Password"
+        };
+        
+        if (typeof window !== "undefined") {
+            localStorage.setItem("prettyfresh_user", JSON.stringify(userData));
+        }
+
+        try {
+            await fetch("/api/user/profile", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(userData)
+            });
+        } catch (e) {
+            console.error("Failed to sync profile to MongoDB:", e);
+        }
+        
         navigateTo("success");
     };
 
@@ -88,6 +137,8 @@ export default function AuthPage() {
                     <LoginScreen 
                         onBack={navigateBack} 
                         onNext={handleLoginContinue} 
+                        onLoginSuccess={handleLoginSuccess}
+                        onForgotLink={() => navigateTo("forgot")}
                         onRegisterLink={() => navigateTo("register")} 
                     />
                 );
@@ -95,22 +146,16 @@ export default function AuthPage() {
                 return (
                     <ForgotLoginScreen 
                         onBack={navigateBack} 
-                        onNext={handleLoginContinue} 
+                        onNext={handleForgotContinue} 
                     />
                 );
             case "otp":
+                // Kept for type safety, but bypassed
                 return (
                     <OtpScreen 
                         mobileNumber={mobileNumber} 
                         onBack={navigateBack} 
-                        onVerifySuccess={() => {
-                            // If the user name is empty, it means they are registering for the first time
-                            if (!name) {
-                                navigateTo("register");
-                            } else {
-                                navigateTo("success");
-                            }
-                        }} 
+                        onVerifySuccess={() => navigateTo("success")} 
                     />
                 );
             case "register":
@@ -131,7 +176,32 @@ export default function AuthPage() {
             case "address":
                 return (
                     <AddressSetupScreen 
-                        onSkip={() => navigateTo("success")} 
+                        onSkip={async () => {
+                            // On skip address, save user with current address info or default
+                            const userData = {
+                                name: name || "PrettyFresh Member",
+                                email: email || "member@prettyfresh.com",
+                                phone: mobileNumber || "",
+                                avatar: avatar || "/assets/default-avatar.png",
+                                gender: gender || "Not Specified",
+                                dob: dob || "",
+                                address: "Not Provided",
+                                provider: "Email & Password"
+                            };
+                            if (typeof window !== "undefined") {
+                                localStorage.setItem("prettyfresh_user", JSON.stringify(userData));
+                            }
+                            try {
+                                await fetch("/api/user/profile", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify(userData)
+                                });
+                            } catch (e) {
+                                console.error("Failed to sync skipped profile to MongoDB:", e);
+                            }
+                            navigateTo("success");
+                        }} 
                         onNext={handleAddressContinue} 
                     />
                 );

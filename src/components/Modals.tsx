@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useCart } from "@/context/CartContext";
 import { X, PartyPopper, CheckCircle } from "lucide-react";
+import { toBanglaNumber } from "@/lib/bangla";
 
 export const Modals: React.FC = () => {
     const {
@@ -140,8 +141,8 @@ export const Modals: React.FC = () => {
                     <p>Thank you for shopping with PrettyFresh.</p>
                 </div>
                 <div className="order-summary-box">
-                    <p>Your Order ID: <strong>{successOrderId}</strong></p>
-                    <p>Rider will arrive in <strong className="text-green">58 Minutes</strong></p>
+                    <p>Your Order ID: <strong>{toBanglaNumber(successOrderId)}</strong></p>
+                    <p>Rider will arrive in <strong className="text-green">{toBanglaNumber("58")} Minutes</strong></p>
                     <p>Total Charge: <strong id="success-total-price">{successTotal}</strong> (Cash on Delivery)</p>
                 </div>
                 <button className="btn btn-primary btn-block" onClick={() => setCheckoutSuccessOpen(false)}>

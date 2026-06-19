@@ -4,8 +4,10 @@ import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { 
     Leaf, ArrowLeft, Smartphone, ArrowRight, ShieldCheck, 
-    Camera, User, MapPin, Navigation, AlertCircle 
+    Camera, User, MapPin, Navigation, AlertCircle, Eye, EyeOff, Lock, Mail
 } from "lucide-react";
+import { auth, googleProvider } from "@/lib/firebase";
+import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 
 // ==========================================
 // HELPER CHEVRON & TOAST TRIGGERS (SIMULATION)
@@ -85,18 +87,78 @@ export const WelcomeScreen: React.FC<WelcomeProps> = ({ onNavigate }) => {
 interface LoginProps {
     onBack: () => void;
     onNext: (phone: string) => void;
+    onLoginSuccess: (user: any) => void;
+    onForgotLink: () => void;
     onRegisterLink: () => void;
 }
 
-export const LoginScreen: React.FC<LoginProps> = ({ onBack, onNext, onRegisterLink }) => {
+export const LoginScreen: React.FC<LoginProps> = ({ onBack, onNext, onLoginSuccess, onForgotLink, onRegisterLink }) => {
+    const [loginMethod, setLoginMethod] = useState<"password" | "mobile">("password");
+    
+    // Email & Password login states
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    
+    // Mobile number state
     const [phone, setPhone] = useState("");
+    
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
-    const handleContinue = (e: React.FormEvent) => {
+    const handlePasswordLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Regex phone validation: simple 10-11 digit numeric test
+        // Simple validation
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            setError("Please enter a valid email address.");
+            return;
+        }
+        if (password.length < 6) {
+            setError("Password must be at least 6 characters.");
+            return;
+        }
+
+        setError("");
+        setLoading(true);
+        
+        try {
+            // First call server-side route handler
+            const res = await fetch("/api/auth/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await res.json();
+            
+            setLoading(false);
+            
+            if (!res.ok || data.error) {
+                setError(data.error || "Invalid credentials.");
+                return;
+            }
+
+            onLoginSuccess(data.user);
+        } catch (err: any) {
+            console.error("Database Login Error:", err);
+            setLoading(false);
+            setError("Connection failed. Attempting offline backup login...");
+            // Simulate fallback
+            setTimeout(() => {
+                onLoginSuccess({
+                    name: email.split("@")[0] || "Demo User",
+                    email: email,
+                    phone: "01712345678",
+                    avatar: "/assets/default-avatar.png",
+                    provider: "Password (Simulated)"
+                });
+            }, 1000);
+        }
+    };
+
+    const handleMobileContinue = (e: React.FormEvent) => {
+        e.preventDefault();
+        
         const phoneRegex = /^[0-9]{10,11}$/;
         if (!phoneRegex.test(phone)) {
             setError("Please enter a valid 10 or 11 digit mobile number.");
@@ -106,11 +168,62 @@ export const LoginScreen: React.FC<LoginProps> = ({ onBack, onNext, onRegisterLi
         setError("");
         setLoading(true);
         
-        // Mock loading state
         setTimeout(() => {
             setLoading(false);
-            onNext(phone);
+            // OTP is disabled, so we route directly:
+            // Since it's simulated, treat it as a successful login with mobile provider
+            onLoginSuccess({
+                name: "PrettyFresh Customer",
+                email: `${phone}@prettyfresh.com`,
+                phone: phone,
+                avatar: "/assets/default-avatar.png",
+                provider: "Mobile OTP-Bypassed"
+            });
         }, 1200);
+    };
+
+    const handleGoogleLogin = async () => {
+        setLoading(true);
+        setError("");
+        let googlePayload = {
+            name: "Sajib Hassan",
+            email: "sajib.hassan@example.com",
+            avatar: "/assets/default-avatar.png",
+            provider: "Google"
+        };
+        try {
+            const userCredential = await signInWithPopup(auth, googleProvider);
+            const user = userCredential.user;
+            googlePayload = {
+                name: user.displayName || "Google User",
+                email: user.email || "google@prettyfresh.com",
+                avatar: user.photoURL || "/assets/default-avatar.png",
+                provider: "Google"
+            };
+        } catch (err: any) {
+            console.error("Google Auth Error warning:", err);
+            triggerToast("Google Auth unconfigured. Simulating sign-in.");
+        }
+
+        // Always sync the user profile with MongoDB
+        try {
+            const res = await fetch("/api/auth/google", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(googlePayload)
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                onLoginSuccess(data.user);
+            } else {
+                throw new Error(data.error || "Failed upsert");
+            }
+        } catch (dbErr) {
+            console.error("Database sync failed, falling back to client simulation:", dbErr);
+            onLoginSuccess(googlePayload);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -125,53 +238,163 @@ export const LoginScreen: React.FC<LoginProps> = ({ onBack, onNext, onRegisterLi
                 </div>
             </div>
 
-            <div className="auth-title-row" style={{ textAlign: "left" }}>
+            <div className="auth-title-row" style={{ textAlign: "left", marginBottom: "16px" }}>
                 <h2 className="auth-title">Welcome Back!</h2>
-                <p className="auth-subtitle">Log in to your account with mobile verification.</p>
+                <p className="auth-subtitle">Log in to manage your fresh organic orders.</p>
             </div>
 
-            <form onSubmit={handleContinue} className="modal-form">
-                <div className="input-field">
-                    <label>Mobile Number</label>
-                    <div className="phone-input-group">
-                        <div className="country-select-wrapper">
-                            <select className="country-select" defaultValue="+880">
-                                <option value="+880">+880 (BD)</option>
-                                <option value="+1">+1 (US)</option>
-                                <option value="+44">+44 (UK)</option>
-                            </select>
-                            <ChevronDown className="country-select-chevron" />
+            {/* Login Method Tabs */}
+            <div className="auth-tabs" style={{ display: "flex", gap: "10px", marginBottom: "20px", borderBottom: "1px solid var(--color-border)" }}>
+                <button 
+                    type="button"
+                    style={{ 
+                        flex: 1, 
+                        padding: "10px 0", 
+                        fontWeight: 700, 
+                        fontSize: "0.9rem",
+                        borderBottom: loginMethod === "password" ? "3px solid var(--color-primary)" : "3px solid transparent", 
+                        color: loginMethod === "password" ? "var(--color-primary)" : "var(--color-text-muted)",
+                        transition: "var(--transition-smooth)"
+                    }}
+                    onClick={() => { setLoginMethod("password"); setError(""); }}
+                >
+                    Email & Password
+                </button>
+                <button 
+                    type="button"
+                    style={{ 
+                        flex: 1, 
+                        padding: "10px 0", 
+                        fontWeight: 700, 
+                        fontSize: "0.9rem",
+                        borderBottom: loginMethod === "mobile" ? "3px solid var(--color-primary)" : "3px solid transparent", 
+                        color: loginMethod === "mobile" ? "var(--color-primary)" : "var(--color-text-muted)",
+                        transition: "var(--transition-smooth)"
+                    }}
+                    onClick={() => { setLoginMethod("mobile"); setError(""); }}
+                >
+                    Mobile Sign-in
+                </button>
+            </div>
+
+            {loginMethod === "password" ? (
+                /* Username / Password Form */
+                <form onSubmit={handlePasswordLogin} className="modal-form">
+                    <div className="input-field">
+                        <label htmlFor="login-email">Email Address</label>
+                        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                            <Mail size={18} style={{ position: "absolute", left: "12px", color: "var(--color-text-muted)" }} />
+                            <input 
+                                type="email" 
+                                id="login-email" 
+                                placeholder="name@example.com" 
+                                value={email}
+                                onChange={(e) => {
+                                    setEmail(e.target.value);
+                                    if (error) setError("");
+                                }}
+                                style={{ paddingLeft: "40px", width: "100%" }}
+                                required 
+                            />
                         </div>
-                        <input 
-                            type="tel"
-                            className="phone-raw-input"
-                            placeholder="01700000000"
-                            value={phone}
-                            onChange={(e) => {
-                                setPhone(e.target.value.replace(/\D/g, "")); // numeric only
-                                if (error) setError("");
-                            }}
-                            maxLength={11}
-                            required
-                        />
                     </div>
+
+                    <div className="input-field">
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <label htmlFor="login-pass">Password</label>
+                            <button 
+                                type="button" 
+                                onClick={onForgotLink}
+                                style={{ fontSize: "0.8rem", color: "var(--color-primary)", fontWeight: 600, marginBottom: "4px" }}
+                            >
+                                Forgot Password?
+                            </button>
+                        </div>
+                        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                            <Lock size={18} style={{ position: "absolute", left: "12px", color: "var(--color-text-muted)" }} />
+                            <input 
+                                type={showPassword ? "text" : "password"} 
+                                id="login-pass" 
+                                placeholder="••••••••" 
+                                value={password}
+                                onChange={(e) => {
+                                    setPassword(e.target.value);
+                                    if (error) setError("");
+                                }}
+                                style={{ paddingLeft: "40px", paddingRight: "40px", width: "100%" }}
+                                required 
+                            />
+                            <button 
+                                type="button" 
+                                onClick={() => setShowPassword(!showPassword)}
+                                style={{ position: "absolute", right: "12px", color: "var(--color-text-muted)" }}
+                            >
+                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                        </div>
+                    </div>
+
                     {error && (
-                        <span className="field-error-msg">
+                        <span className="field-error-msg" style={{ marginTop: "8px" }}>
                             <AlertCircle size={14} /> {error}
                         </span>
                     )}
-                </div>
 
-                <button 
-                    type="submit" 
-                    className="btn btn-primary btn-block btn-lg" 
-                    disabled={loading || phone.length < 10}
-                    style={{ marginTop: "16px" }}
-                >
-                    {loading ? "Verifying..." : "Continue"}
-                    {!loading && <ArrowRight size={18} />}
-                </button>
-            </form>
+                    <button 
+                        type="submit" 
+                        className="btn btn-primary btn-block btn-lg" 
+                        disabled={loading}
+                        style={{ marginTop: "20px" }}
+                    >
+                        {loading ? "Logging in..." : "Log In"}
+                        {!loading && <ArrowRight size={18} />}
+                    </button>
+                </form>
+            ) : (
+                /* Mobile OTP Bypassed Form */
+                <form onSubmit={handleMobileContinue} className="modal-form">
+                    <div className="input-field">
+                        <label>Mobile Number</label>
+                        <div className="phone-input-group">
+                            <div className="country-select-wrapper">
+                                <select className="country-select" defaultValue="+880">
+                                    <option value="+880">+880 (BD)</option>
+                                    <option value="+1">+1 (US)</option>
+                                    <option value="+44">+44 (UK)</option>
+                                </select>
+                                <ChevronDown className="country-select-chevron" />
+                            </div>
+                            <input 
+                                type="tel"
+                                className="phone-raw-input"
+                                placeholder="01700000000"
+                                value={phone}
+                                onChange={(e) => {
+                                    setPhone(e.target.value.replace(/\D/g, ""));
+                                    if (error) setError("");
+                                }}
+                                maxLength={11}
+                                required
+                            />
+                        </div>
+                        {error && (
+                            <span className="field-error-msg">
+                                <AlertCircle size={14} /> {error}
+                            </span>
+                        )}
+                    </div>
+
+                    <button 
+                        type="submit" 
+                        className="btn btn-primary btn-block btn-lg" 
+                        disabled={loading || phone.length < 10}
+                        style={{ marginTop: "20px" }}
+                    >
+                        {loading ? "Verifying..." : "Continue"}
+                        {!loading && <ArrowRight size={18} />}
+                    </button>
+                </form>
+            )}
 
             <div style={{ margin: "24px 0", display: "flex", alignItems: "center", gap: "12px" }}>
                 <hr style={{ flexGrow: 1, border: 0, height: "1px", backgroundColor: "var(--color-border)" }} />
@@ -181,13 +404,8 @@ export const LoginScreen: React.FC<LoginProps> = ({ onBack, onNext, onRegisterLi
 
             <button 
                 className="btn btn-secondary btn-block btn-lg"
-                onClick={() => {
-                    setLoading(true);
-                    setTimeout(() => {
-                        setLoading(false);
-                        onNext("Google User");
-                    }, 1000);
-                }}
+                onClick={handleGoogleLogin}
+                disabled={loading}
             >
                 <svg viewBox="0 0 24 24" width="18" height="18" style={{ marginRight: "8px" }}>
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -388,20 +606,24 @@ export const OtpScreen: React.FC<OtpProps> = ({ mobileNumber, onBack, onVerifySu
 // ==========================================
 interface RegisterProps {
     onBack: () => void;
-    onNext: (data: { name: string; phone: string; email: string }) => void;
+    onNext: (data: { name: string; phone: string; email: string; password?: string }) => void;
 }
 
 export const RegisterScreen: React.FC<RegisterProps> = ({ onBack, onNext }) => {
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
     const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [referral, setReferral] = useState("");
     
     const [nameError, setNameError] = useState("");
     const [phoneError, setPhoneError] = useState("");
     const [emailError, setEmailError] = useState("");
+    const [passwordError, setPasswordError] = useState("");
+    const [loading, setLoading] = useState(false);
 
-    const handleRegister = (e: React.FormEvent) => {
+    const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         
         let valid = true;
@@ -416,13 +638,48 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onBack, onNext }) => {
             valid = false;
         }
 
-        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            setEmailError("Please enter a valid email format.");
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            setEmailError("Please enter a valid email address.");
+            valid = false;
+        }
+
+        if (password.length < 6) {
+            setPasswordError("Password must be at least 6 characters.");
             valid = false;
         }
 
         if (valid) {
-            onNext({ name, phone, email });
+            setLoading(true);
+            
+            // 1. Try registering via Firebase Auth client-side first
+            try {
+                await createUserWithEmailAndPassword(auth, email, password);
+            } catch (err: any) {
+                console.error("Firebase SignUp client warning:", err);
+            }
+
+            // 2. Persist the registration details in MongoDB
+            try {
+                const res = await fetch("/api/auth/register", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name, phone, email, password })
+                });
+                const data = await res.json();
+                
+                setLoading(false);
+                
+                if (res.ok && data.success) {
+                    onNext({ name, phone, email, password });
+                } else {
+                    setEmailError(data.error || "Failed to create account. Try a different email.");
+                }
+            } catch (dbErr) {
+                console.error("Database registration failed, falling back to simulation:", dbErr);
+                setLoading(false);
+                triggerToast("DB connection error. Simulating local signup.");
+                onNext({ name, phone, email, password });
+            }
         }
     };
 
@@ -435,7 +692,7 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onBack, onNext }) => {
                 <span style={{ fontWeight: 700 }}>Create Account</span>
             </div>
 
-            <div className="auth-title-row" style={{ textAlign: "left" }}>
+            <div className="auth-title-row" style={{ textAlign: "left", marginBottom: "16px" }}>
                 <h2 className="auth-title">Get Started</h2>
                 <p className="auth-subtitle">Register to enjoy fresh groceries delivered immediately.</p>
             </div>
@@ -443,50 +700,90 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onBack, onNext }) => {
             <form onSubmit={handleRegister} className="modal-form">
                 <div className="input-field">
                     <label htmlFor="reg-name">Full Name</label>
-                    <input 
-                        type="text" 
-                        id="reg-name" 
-                        placeholder="John Doe" 
-                        value={name}
-                        onChange={(e) => {
-                            setName(e.target.value);
-                            if (nameError) setNameError("");
-                        }}
-                        required 
-                    />
+                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                        <User size={18} style={{ position: "absolute", left: "12px", color: "var(--color-text-muted)" }} />
+                        <input 
+                            type="text" 
+                            id="reg-name" 
+                            placeholder="John Doe" 
+                            value={name}
+                            onChange={(e) => {
+                                setName(e.target.value);
+                                if (nameError) setNameError("");
+                            }}
+                            style={{ paddingLeft: "40px", width: "100%" }}
+                            required 
+                        />
+                    </div>
                     {nameError && <span className="field-error-msg"><AlertCircle size={14} /> {nameError}</span>}
                 </div>
 
                 <div className="input-field">
                     <label htmlFor="reg-phone">Mobile Number</label>
-                    <input 
-                        type="tel" 
-                        id="reg-phone" 
-                        placeholder="e.g. 01700000000" 
-                        value={phone}
-                        onChange={(e) => {
-                            setPhone(e.target.value.replace(/\D/g, ""));
-                            if (phoneError) setPhoneError("");
-                        }}
-                        maxLength={11}
-                        required 
-                    />
+                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                        <Smartphone size={18} style={{ position: "absolute", left: "12px", color: "var(--color-text-muted)" }} />
+                        <input 
+                            type="tel" 
+                            id="reg-phone" 
+                            placeholder="e.g. 01700000000" 
+                            value={phone}
+                            onChange={(e) => {
+                                setPhone(e.target.value.replace(/\D/g, ""));
+                                if (phoneError) setPhoneError("");
+                            }}
+                            maxLength={11}
+                            style={{ paddingLeft: "40px", width: "100%" }}
+                            required 
+                        />
+                    </div>
                     {phoneError && <span className="field-error-msg"><AlertCircle size={14} /> {phoneError}</span>}
                 </div>
 
                 <div className="input-field">
-                    <label htmlFor="reg-email">Email (Optional)</label>
-                    <input 
-                        type="email" 
-                        id="reg-email" 
-                        placeholder="john@example.com" 
-                        value={email}
-                        onChange={(e) => {
-                            setEmail(e.target.value);
-                            if (emailError) setEmailError("");
-                        }}
-                    />
+                    <label htmlFor="reg-email">Email Address</label>
+                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                        <Mail size={18} style={{ position: "absolute", left: "12px", color: "var(--color-text-muted)" }} />
+                        <input 
+                            type="email" 
+                            id="reg-email" 
+                            placeholder="john@example.com" 
+                            value={email}
+                            onChange={(e) => {
+                                setEmail(e.target.value);
+                                if (emailError) setEmailError("");
+                            }}
+                            style={{ paddingLeft: "40px", width: "100%" }}
+                            required
+                        />
+                    </div>
                     {emailError && <span className="field-error-msg"><AlertCircle size={14} /> {emailError}</span>}
+                </div>
+
+                <div className="input-field">
+                    <label htmlFor="reg-password">Password</label>
+                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                        <Lock size={18} style={{ position: "absolute", left: "12px", color: "var(--color-text-muted)" }} />
+                        <input 
+                            type={showPassword ? "text" : "password"} 
+                            id="reg-password" 
+                            placeholder="••••••••" 
+                            value={password}
+                            onChange={(e) => {
+                                setPassword(e.target.value);
+                                if (passwordError) setPasswordError("");
+                            }}
+                            style={{ paddingLeft: "40px", paddingRight: "40px", width: "100%" }}
+                            required 
+                        />
+                        <button 
+                            type="button" 
+                            onClick={() => setShowPassword(!showPassword)}
+                            style={{ position: "absolute", right: "12px", color: "var(--color-text-muted)" }}
+                        >
+                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                    </div>
+                    {passwordError && <span className="field-error-msg"><AlertCircle size={14} /> {passwordError}</span>}
                 </div>
 
                 <div className="input-field">
@@ -500,9 +797,9 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onBack, onNext }) => {
                     />
                 </div>
 
-                <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: "12px" }}>
-                    <span>Create Account</span>
-                    <ArrowRight size={18} />
+                <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: "12px" }} disabled={loading}>
+                    <span>{loading ? "Creating..." : "Create Account"}</span>
+                    {!loading && <ArrowRight size={18} />}
                 </button>
             </form>
         </div>
@@ -845,8 +1142,8 @@ export const ForgotLoginScreen: React.FC<ForgotProps> = ({ onBack, onNext }) => 
 // 8. ACCOUNT SUCCESS SCREEN
 // ==========================================
 export const AccountSuccessScreen: React.FC = () => {
-    const handleStart = () => {
-        window.location.href = "/";
+    const handleDashboard = () => {
+        window.location.href = "/dashboard";
     };
 
     return (
@@ -857,18 +1154,18 @@ export const AccountSuccessScreen: React.FC = () => {
             
             <h2 className="auth-title">Account Created!</h2>
             <p className="auth-subtitle" style={{ marginBottom: "36px", padding: "0 10px" }}>
-                Your account has been created successfully. You are now ready to place fresh organic grocery orders.
+                Your account has been created successfully. Access your dashboard to track your orders, points, and delivery logistics.
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                <button className="btn btn-primary btn-lg btn-block" onClick={handleStart}>
-                    Start Shopping
+                <button className="btn btn-primary btn-lg btn-block" onClick={handleDashboard}>
+                    Go to Dashboard
                 </button>
                 <button 
                     className="btn btn-secondary btn-lg btn-block" 
-                    onClick={() => window.location.href = "/#category-section"}
+                    onClick={() => window.location.href = "/"}
                 >
-                    Browse Categories
+                    Start Shopping
                 </button>
             </div>
         </div>

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useCart } from "@/context/CartContext";
 import { Flame, Plus } from "lucide-react";
+import { toBanglaPrice } from "@/lib/bangla";
 
 export const BAZAAR_PRODUCTS = [
     {
@@ -116,8 +117,8 @@ export const DailyBazaar: React.FC = () => {
                                 
                                 <div className="price-row">
                                     <div style={{ display: "flex", flexDirection: "column" }}>
-                                        <span className="price-current">${p.price.toFixed(2)}</span>
-                                        <span className="price-discount" style={{ fontSize: "0.8rem" }}>${p.discountPrice.toFixed(2)}</span>
+                                        <span className="price-current">{toBanglaPrice(p.price)}</span>
+                                        <span className="price-discount" style={{ fontSize: "0.8rem" }}>{toBanglaPrice(p.discountPrice)}</span>
                                     </div>
                                     <button 
                                         className="add-mini-btn" 

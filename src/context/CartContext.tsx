@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { toBanglaPrice } from "@/lib/bangla";
 
 export interface CartItem {
     id: number;
@@ -146,7 +147,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         const total = subtotal + 2.00;
         
-        setSuccessTotal(`$${total.toFixed(2)}`);
+        setSuccessTotal(toBanglaPrice(total));
         setSuccessOrderId("PF-" + Math.floor(10000 + Math.random() * 90000));
         
         setCartOpen(false);

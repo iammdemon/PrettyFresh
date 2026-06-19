@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Image from "next/image";
 import { useCart } from "@/context/CartContext";
 import { Heart, ChevronDown, ShoppingCart, SearchCode } from "lucide-react";
+import { toBanglaPrice } from "@/lib/bangla";
 
 export const PRODUCTS = [
     {
@@ -206,8 +207,8 @@ export const FeaturedProducts: React.FC = () => {
                                     </div>
                                     
                                     <div className="product-price-row">
-                                        <span className="price-current">${p.price.toFixed(2)}</span>
-                                        <span className="price-discount">${p.discountPrice.toFixed(2)}</span>
+                                        <span className="price-current">{toBanglaPrice(p.price)}</span>
+                                        <span className="price-discount">{toBanglaPrice(p.discountPrice)}</span>
                                     </div>
                                     
                                     <button 

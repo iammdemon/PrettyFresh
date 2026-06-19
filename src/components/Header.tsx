@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useCart } from "@/context/CartContext";
 import { Leaf, MapPin, Grid, ChevronDown, Search, X, User, ShoppingCart } from "lucide-react";
+import { toBanglaPrice } from "@/lib/bangla";
 
 export const Header: React.FC = () => {
     const {
@@ -19,6 +20,18 @@ export const Header: React.FC = () => {
     const [locationMenuOpen, setLocationMenuOpen] = useState(false);
     const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
     const [scrolled, setScrolled] = useState(false);
+    const [user, setUser] = useState<any>(null);
+
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const saved = localStorage.getItem("prettyfresh_user");
+            if (saved) {
+                try {
+                    setUser(JSON.parse(saved));
+                } catch (e) {}
+            }
+        }
+    }, []);
 
     // Track scroll event to change style
     useEffect(() => {
@@ -156,16 +169,23 @@ export const Header: React.FC = () => {
 
                 {/* Action Buttons */}
                 <div className="header-actions">
-                    <button className="login-btn" onClick={() => setLoginOpen(true)}>
-                        <User />
-                        <span>Login</span>
-                    </button>
+                    {user ? (
+                        <button className="login-btn" onClick={() => window.location.href = "/dashboard"}>
+                            <User className="icon-green" />
+                            <span>{user.name.split(" ")[0]}</span>
+                        </button>
+                    ) : (
+                        <button className="login-btn" onClick={() => window.location.href = "/auth"}>
+                            <User />
+                            <span>Login</span>
+                        </button>
+                    )}
                     <button className="cart-trigger" onClick={() => setCartOpen(true)} aria-label="Open cart">
                         <div className="cart-icon-wrapper">
                             <ShoppingCart />
                             <span className="cart-badge">{totalItems}</span>
                         </div>
-                        <span className="cart-text">${subtotal.toFixed(2)}</span>
+                        <span className="cart-text">{toBanglaPrice(subtotal)}</span>
                     </button>
                 </div>
             </div>
