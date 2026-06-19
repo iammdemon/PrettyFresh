@@ -21,6 +21,7 @@ interface UserProfile {
 export default function CustomerDashboard() {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [activeTab, setActiveTab] = useState<"overview" | "orders" | "addresses">("overview");
+    const [orders, setOrders] = useState<any[]>([]);
 
     useEffect(() => {
         if (typeof window !== "undefined") {
@@ -46,6 +47,19 @@ export default function CustomerDashboard() {
             }
         }
     }, []);
+
+    useEffect(() => {
+        if (user && user.email) {
+            fetch(`/api/orders?email=${encodeURIComponent(user.email)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        setOrders(data.orders);
+                    }
+                })
+                .catch(err => console.error("Error fetching orders:", err));
+        }
+    }, [user]);
 
     const handleLogout = () => {
         if (typeof window !== "undefined") {
@@ -217,116 +231,178 @@ export default function CustomerDashboard() {
                         </div>
 
                         {/* 2. Live Order Tracker Card */}
-                        <div style={{ 
-                            backgroundColor: "var(--color-white)", 
-                            borderRadius: "var(--radius-md)", 
-                            padding: "24px",
-                            boxShadow: "var(--shadow-sm)",
-                            border: "1px solid var(--color-border)"
-                        }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                                <h3 style={{ fontSize: "1.1rem" }}>Active Order Status</h3>
-                                <span style={{ 
-                                    backgroundColor: "var(--color-accent-light)", 
-                                    color: "var(--color-primary)", 
-                                    fontSize: "0.75rem", 
-                                    fontWeight: 700,
-                                    padding: "4px 8px",
-                                    borderRadius: "4px"
-                                }}>
-                                    IN TRANSIT
-                                </span>
-                            </div>
+                        {(() => {
+                            const activeOrder = orders.find(o => ["Pending", "Confirmed", "Packed", "In Transit"].includes(o.status));
                             
-                            <div style={{ backgroundColor: "var(--color-bg)", borderRadius: "var(--radius-sm)", padding: "12px 16px", marginBottom: "20px" }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem" }}>
-                                    <span>Order ID: <strong>{toBanglaNumber("#PF-84920")}</strong></span>
-                                    <span>Est. Delivery: <strong>{toBanglaNumber("15")} Mins</strong></span>
-                                </div>
-                            </div>
+                            if (!activeOrder) {
+                                return (
+                                    <div style={{ 
+                                        backgroundColor: "var(--color-white)", 
+                                        borderRadius: "var(--radius-md)", 
+                                        padding: "24px",
+                                        boxShadow: "var(--shadow-sm)",
+                                        border: "1px solid var(--color-border)",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        textAlign: "center"
+                                    }}>
+                                        <Package size={48} color="var(--color-text-muted)" style={{ marginBottom: "16px", opacity: 0.5 }} />
+                                        <h3 style={{ fontSize: "1.1rem", marginBottom: "8px" }}>No Active Orders</h3>
+                                        <p style={{ color: "var(--color-text-muted)", fontSize: "0.9rem" }}>You don't have any orders currently in progress.</p>
+                                        <button className="btn btn-primary" style={{ marginTop: "16px" }} onClick={() => window.location.href = "/"}>Start Shopping</button>
+                                    </div>
+                                );
+                            }
 
-                            {/* Timeline steps */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: "20px", position: "relative" }}>
-                                {/* Timeline line */}
+                            const statusMap: Record<string, number> = {
+                                "Pending": 1,
+                                "Confirmed": 2,
+                                "Packed": 3,
+                                "In Transit": 4
+                            };
+                            
+                            const progressIndex = statusMap[activeOrder.status] || 1;
+                            const progressHeight = progressIndex === 1 ? "10%" : progressIndex === 2 ? "33%" : progressIndex === 3 ? "66%" : "100%";
+
+                            return (
                                 <div style={{ 
-                                    position: "absolute", 
-                                    left: "17px", 
-                                    top: "8px", 
-                                    bottom: "8px", 
-                                    width: "2px", 
-                                    backgroundColor: "var(--color-primary-light)",
-                                    zIndex: 1 
+                                    backgroundColor: "var(--color-white)", 
+                                    borderRadius: "var(--radius-md)", 
+                                    padding: "24px",
+                                    boxShadow: "var(--shadow-sm)",
+                                    border: "1px solid var(--color-border)"
                                 }}>
-                                    <div style={{ height: "66%", width: "100%", backgroundColor: "var(--color-primary)" }}></div>
-                                </div>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                                        <h3 style={{ fontSize: "1.1rem" }}>Active Order Status</h3>
+                                        <span style={{ 
+                                            backgroundColor: "var(--color-accent-light)", 
+                                            color: "var(--color-primary)", 
+                                            fontSize: "0.75rem", 
+                                            fontWeight: 700,
+                                            padding: "4px 8px",
+                                            borderRadius: "4px",
+                                            textTransform: "uppercase"
+                                        }}>
+                                            {activeOrder.status}
+                                        </span>
+                                    </div>
+                                    
+                                    <div style={{ backgroundColor: "var(--color-bg)", borderRadius: "var(--radius-sm)", padding: "12px 16px", marginBottom: "20px" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem" }}>
+                                            <span>Order ID: <strong>{toBanglaNumber(activeOrder.orderId)}</strong></span>
+                                            <span>Date: <strong>{new Date(activeOrder.createdAt).toLocaleDateString()}</strong></span>
+                                        </div>
+                                    </div>
 
-                                <div style={{ display: "flex", alignItems: "center", gap: "16px", position: "relative", zIndex: 2 }}>
-                                    <div style={{ 
-                                        width: "36px", 
-                                        height: "36px", 
-                                        borderRadius: "50%", 
-                                        backgroundColor: "var(--color-primary)", 
-                                        color: "white",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center"
-                                    }}>
-                                        <CheckCircle size={18} />
-                                    </div>
-                                    <div>
-                                        <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>Order Confirmed</div>
-                                        <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>Today, {toBanglaNumber("02:30")} PM</span>
-                                    </div>
-                                </div>
+                                    {/* Timeline steps */}
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "20px", position: "relative" }}>
+                                        {/* Timeline line */}
+                                        <div style={{ 
+                                            position: "absolute", 
+                                            left: "17px", 
+                                            top: "8px", 
+                                            bottom: "8px", 
+                                            width: "2px", 
+                                            backgroundColor: "var(--color-primary-light)",
+                                            zIndex: 1 
+                                        }}>
+                                            <div style={{ height: progressHeight, width: "100%", backgroundColor: "var(--color-primary)", transition: "height 0.3s ease" }}></div>
+                                        </div>
 
-                                <div style={{ display: "flex", alignItems: "center", gap: "16px", position: "relative", zIndex: 2 }}>
-                                    <div style={{ 
-                                        width: "36px", 
-                                        height: "36px", 
-                                        borderRadius: "50%", 
-                                        backgroundColor: "var(--color-primary)", 
-                                        color: "white",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center"
-                                    }}>
-                                        <Package size={18} />
-                                    </div>
-                                    <div>
-                                        <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>Quality Checked & Packed</div>
-                                        <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>Today, {toBanglaNumber("02:42")} PM</span>
-                                    </div>
-                                </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "16px", position: "relative", zIndex: 2, opacity: progressIndex >= 1 ? 1 : 0.5 }}>
+                                            <div style={{ 
+                                                width: "36px", 
+                                                height: "36px", 
+                                                borderRadius: "50%", 
+                                                backgroundColor: progressIndex >= 1 ? "var(--color-primary)" : "var(--color-bg)", 
+                                                color: progressIndex >= 1 ? "white" : "var(--color-text-muted)",
+                                                border: progressIndex >= 1 ? "none" : "2px solid var(--color-border)",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center"
+                                            }}>
+                                                <Clock size={18} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>Order Pending</div>
+                                                <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>Order received</span>
+                                            </div>
+                                        </div>
 
-                                <div style={{ display: "flex", alignItems: "center", gap: "16px", position: "relative", zIndex: 2 }}>
-                                    <div style={{ 
-                                        width: "36px", 
-                                        height: "36px", 
-                                        borderRadius: "50%", 
-                                        backgroundColor: "var(--color-primary)", 
-                                        color: "white",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center"
-                                    }}>
-                                        <Truck size={18} />
-                                    </div>
-                                    <div>
-                                        <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>Out for Delivery</div>
-                                        <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>Rider Sajid is heading to you</span>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "16px", position: "relative", zIndex: 2, opacity: progressIndex >= 2 ? 1 : 0.5 }}>
+                                            <div style={{ 
+                                                width: "36px", 
+                                                height: "36px", 
+                                                borderRadius: "50%", 
+                                                backgroundColor: progressIndex >= 2 ? "var(--color-primary)" : "var(--color-bg)", 
+                                                color: progressIndex >= 2 ? "white" : "var(--color-text-muted)",
+                                                border: progressIndex >= 2 ? "none" : "2px solid var(--color-border)",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center"
+                                            }}>
+                                                <CheckCircle size={18} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>Order Confirmed</div>
+                                                <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>Preparing your items</span>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: "flex", alignItems: "center", gap: "16px", position: "relative", zIndex: 2, opacity: progressIndex >= 3 ? 1 : 0.5 }}>
+                                            <div style={{ 
+                                                width: "36px", 
+                                                height: "36px", 
+                                                borderRadius: "50%", 
+                                                backgroundColor: progressIndex >= 3 ? "var(--color-primary)" : "var(--color-bg)", 
+                                                color: progressIndex >= 3 ? "white" : "var(--color-text-muted)",
+                                                border: progressIndex >= 3 ? "none" : "2px solid var(--color-border)",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center"
+                                            }}>
+                                                <Package size={18} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>Quality Checked & Packed</div>
+                                                <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>Ready for dispatch</span>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: "flex", alignItems: "center", gap: "16px", position: "relative", zIndex: 2, opacity: progressIndex >= 4 ? 1 : 0.5 }}>
+                                            <div style={{ 
+                                                width: "36px", 
+                                                height: "36px", 
+                                                borderRadius: "50%", 
+                                                backgroundColor: progressIndex >= 4 ? "var(--color-primary)" : "var(--color-bg)", 
+                                                color: progressIndex >= 4 ? "white" : "var(--color-text-muted)",
+                                                border: progressIndex >= 4 ? "none" : "2px solid var(--color-border)",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center"
+                                            }}>
+                                                <Truck size={18} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>Out for Delivery</div>
+                                                <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>Heading to you</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
+                            );
+                        })()}
 
                     </div>
 
                     {/* Stats Cards Section */}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "20px" }}>
                         {[
-                            { icon: <ShoppingBag size={24} />, title: "Total Orders", value: `${toBanglaNumber("18")} Completed` },
+                            { icon: <ShoppingBag size={24} />, title: "Total Orders", value: `${toBanglaNumber(orders.length.toString())}` },
                             { icon: <Award size={24} />, title: "Loyalty Points", value: `${toBanglaNumber("1,240")} pts` },
-                            { icon: <Clock size={24} />, title: "Saved Time", value: `${toBanglaNumber("9.2")} Hours` },
+                            { icon: <Clock size={24} />, title: "Total Spent", value: `${toBanglaPrice(orders.reduce((sum, o) => sum + o.total, 0))}` },
                             { icon: <Smile size={24} />, title: "Freshness Rating", value: `${toBanglaNumber("98")}% (Perfect)` }
                         ].map((stat, i) => (
                             <div key={i} style={{ 
@@ -373,20 +449,18 @@ export default function CustomerDashboard() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {[
-                                        { id: "#PF-79105", items: "Fresh Green Broccoli (1kg), Organic Farm Eggs (12pcs)", date: "June 12, 2026", price: 18.40, status: "Delivered" },
-                                        { id: "#PF-72304", items: "Local Red Tomato (2kg), Sweet Malta (1.5kg), Organic Honey", date: "June 05, 2026", price: 24.10, status: "Delivered" },
-                                        { id: "#PF-68492", items: "Fresh Spinach Bundle, Chicken Breast Boneless (1kg)", date: "May 28, 2026", price: 15.60, status: "Delivered" }
-                                    ].map((o, idx) => (
+                                    {orders.length > 0 ? orders.map((o, idx) => (
                                         <tr key={idx} style={{ borderBottom: "1px solid var(--color-border)" }}>
-                                            <td style={{ padding: "16px 12px", fontWeight: 700 }}>{toBanglaNumber(o.id)}</td>
-                                            <td style={{ padding: "16px 12px", color: "var(--color-text-muted)" }}>{toBanglaNumber(o.items)}</td>
-                                            <td style={{ padding: "16px 12px" }}>{toBanglaNumber(o.date)}</td>
-                                            <td style={{ padding: "16px 12px", fontWeight: 700 }}>{toBanglaPrice(o.price)}</td>
+                                            <td style={{ padding: "16px 12px", fontWeight: 700 }}>{toBanglaNumber(o.orderId)}</td>
+                                            <td style={{ padding: "16px 12px", color: "var(--color-text-muted)" }}>
+                                                {o.items.map((item: any) => `${item.name} (${item.weight})`).join(", ")}
+                                            </td>
+                                            <td style={{ padding: "16px 12px" }}>{new Date(o.createdAt).toLocaleDateString()}</td>
+                                            <td style={{ padding: "16px 12px", fontWeight: 700 }}>{toBanglaPrice(o.total)}</td>
                                             <td style={{ padding: "16px 12px" }}>
                                                 <span style={{ 
-                                                    backgroundColor: "var(--color-primary-light)", 
-                                                    color: "var(--color-primary)",
+                                                    backgroundColor: o.status === "Delivered" ? "var(--color-primary-light)" : o.status === "Cancelled" ? "#ffcdd2" : "var(--color-accent-light)", 
+                                                    color: o.status === "Delivered" ? "var(--color-primary)" : o.status === "Cancelled" ? "#d32f2f" : "var(--color-text)",
                                                     padding: "4px 8px",
                                                     borderRadius: "4px",
                                                     fontSize: "0.75rem",
@@ -404,7 +478,13 @@ export default function CustomerDashboard() {
                                                 </button>
                                             </td>
                                         </tr>
-                                    ))}
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={6} style={{ padding: "40px", textAlign: "center", color: "var(--color-text-muted)" }}>
+                                                No past orders found.
+                                            </td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>

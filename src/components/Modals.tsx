@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useCart } from "@/context/CartContext";
 import { X, PartyPopper, CheckCircle } from "lucide-react";
 import { toBanglaNumber } from "@/lib/bangla";
+import { LoginScreen, RegisterScreen, ForgotLoginScreen } from "@/components/AuthScreens";
 
 export const Modals: React.FC = () => {
     const {
@@ -11,10 +12,6 @@ export const Modals: React.FC = () => {
         setLoginOpen,
         refundOpen,
         setRefundOpen,
-        checkoutSuccessOpen,
-        setCheckoutSuccessOpen,
-        successOrderId,
-        successTotal,
         triggerToast
     } = useCart();
 
@@ -24,18 +21,51 @@ export const Modals: React.FC = () => {
     const [claimOrderId, setClaimOrderId] = useState("");
     const [claimReason, setClaimReason] = useState("");
 
+    const [authView, setAuthView] = useState<"login" | "register" | "forgot">("login");
+
     const handleCloseAll = () => {
         setLoginOpen(false);
         setRefundOpen(false);
-        setCheckoutSuccessOpen(false);
+        setAuthView("login");
     };
 
-    const handleLoginSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoginOpen(false);
+    const handleAuthSuccess = (userData: any) => {
+        if (typeof window !== "undefined") {
+            localStorage.setItem("prettyfresh_user", JSON.stringify(userData));
+        }
         triggerToast("Logged in successfully!");
-        setLoginPhone("");
-        setLoginPassword("");
+        setLoginOpen(false);
+        setAuthView("login");
+    };
+
+    const handleRegisterSuccess = async (data: { name: string; phone: string; email: string; password?: string }) => {
+        const userData = {
+            name: data.name || "PrettyFresh Member",
+            email: data.email || "member@prettyfresh.com",
+            phone: data.phone || "",
+            avatar: "/assets/default-avatar.png",
+            gender: "Not Specified",
+            dob: "",
+            address: "Not Provided",
+            provider: "Email & Password",
+            role: "customer"
+        };
+        
+        if (typeof window !== "undefined") {
+            localStorage.setItem("prettyfresh_user", JSON.stringify(userData));
+        }
+
+        try {
+            await fetch("/api/user/profile", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(userData)
+            });
+        } catch (e) {}
+        
+        triggerToast("Registered successfully!");
+        setLoginOpen(false);
+        setAuthView("login");
     };
 
     const handleRefundSubmit = (e: React.FormEvent) => {
@@ -46,7 +76,7 @@ export const Modals: React.FC = () => {
         setClaimReason("");
     };
 
-    const isAnyOpen = loginOpen || refundOpen || checkoutSuccessOpen;
+    const isAnyOpen = loginOpen || refundOpen;
 
     return (
         <>
@@ -56,40 +86,36 @@ export const Modals: React.FC = () => {
                 onClick={handleCloseAll}
             ></div>
             
-            {/* Login Modal */}
-            <div className={`modal-card ${loginOpen ? "active" : ""}`}>
-                <button className="modal-close" onClick={() => setLoginOpen(false)} aria-label="Close modal">
+            {/* Auth Modal */}
+            <div className={`modal-card ${loginOpen ? "active" : ""}`} style={{ padding: "30px", maxHeight: "90vh", overflowY: "auto" }}>
+                <button className="modal-close" onClick={() => { setLoginOpen(false); setAuthView("login"); }} aria-label="Close modal">
                     <X size={16} />
                 </button>
-                <div className="modal-header">
-                    <h3>Login to PrettyFresh</h3>
-                    <p>Welcome back! Enter details to manage your orders.</p>
-                </div>
-                <form className="modal-form" onSubmit={handleLoginSubmit}>
-                    <div className="input-field">
-                        <label htmlFor="login-phone">Mobile Number</label>
-                        <input 
-                            type="tel" 
-                            id="login-phone" 
-                            placeholder="e.g. +8801700000000" 
-                            value={loginPhone}
-                            onChange={(e) => setLoginPhone(e.target.value)}
-                            required 
-                        />
-                    </div>
-                    <div className="input-field">
-                        <label htmlFor="login-password">Password</label>
-                        <input 
-                            type="password" 
-                            id="login-password" 
-                            placeholder="••••••••" 
-                            value={loginPassword}
-                            onChange={(e) => setLoginPassword(e.target.value)}
-                            required 
-                        />
-                    </div>
-                    <button type="submit" className="btn btn-primary btn-block">Log In</button>
-                </form>
+                
+                {authView === "login" && (
+                    <LoginScreen 
+                        onBack={() => { setLoginOpen(false); setAuthView("login"); }} 
+                        onNext={() => setAuthView("register")} 
+                        onLoginSuccess={handleAuthSuccess}
+                        onForgotLink={() => setAuthView("forgot")}
+                        onRegisterLink={() => setAuthView("register")} 
+                    />
+                )}
+                {authView === "register" && (
+                    <RegisterScreen 
+                        onBack={() => setAuthView("login")} 
+                        onNext={handleRegisterSuccess} 
+                    />
+                )}
+                {authView === "forgot" && (
+                    <ForgotLoginScreen 
+                        onBack={() => setAuthView("login")} 
+                        onNext={(phone: string) => {
+                            triggerToast(`Reset link sent to ${phone}!`);
+                            setAuthView("login");
+                        }} 
+                    />
+                )}
             </div>
 
             {/* Refund Modal */}
@@ -126,28 +152,6 @@ export const Modals: React.FC = () => {
                     </div>
                     <button type="submit" className="btn btn-accent btn-block">Submit Claim</button>
                 </form>
-            </div>
-
-            {/* Checkout Success Modal */}
-            <div className={`modal-card ${checkoutSuccessOpen ? "active" : ""}`}>
-                <button className="modal-close" onClick={() => setCheckoutSuccessOpen(false)} aria-label="Close modal">
-                    <X size={16} />
-                </button>
-                <div className="modal-success-icon">
-                    <PartyPopper size={32} />
-                </div>
-                <div className="modal-header text-center">
-                    <h3>Order Placed Successfully!</h3>
-                    <p>Thank you for shopping with PrettyFresh.</p>
-                </div>
-                <div className="order-summary-box">
-                    <p>Your Order ID: <strong>{toBanglaNumber(successOrderId)}</strong></p>
-                    <p>Rider will arrive in <strong className="text-green">{toBanglaNumber("58")} Minutes</strong></p>
-                    <p>Total Charge: <strong id="success-total-price">{successTotal}</strong> (Cash on Delivery)</p>
-                </div>
-                <button className="btn btn-primary btn-block" onClick={() => setCheckoutSuccessOpen(false)}>
-                    Track Order
-                </button>
             </div>
         </>
     );

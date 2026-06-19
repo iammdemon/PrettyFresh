@@ -4,6 +4,7 @@ import React from "react";
 import { useCart } from "@/context/CartContext";
 import { X, ShoppingBasket, Trash2, CreditCard } from "lucide-react";
 import { toBanglaPrice, toBanglaNumber } from "@/lib/bangla";
+import { useRouter } from "next/navigation";
 
 export const CartDrawer: React.FC = () => {
     const {
@@ -12,8 +13,10 @@ export const CartDrawer: React.FC = () => {
         setCartOpen,
         updateQuantity,
         removeItem,
-        checkout
+        triggerToast
     } = useCart();
+    
+    const router = useRouter();
 
     const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -30,6 +33,20 @@ export const CartDrawer: React.FC = () => {
                 top: section.offsetTop - 90,
                 behavior: "smooth"
             });
+        }
+    };
+
+    const handleProceedCheckout = () => {
+        if (typeof window !== "undefined") {
+            const saved = localStorage.getItem("prettyfresh_user");
+            if (saved) {
+                setCartOpen(false);
+                router.push("/checkout");
+            } else {
+                setCartOpen(false);
+                triggerToast("Please login or create an account to place an order.");
+                router.push("/auth");
+            }
         }
     };
 
@@ -120,7 +137,7 @@ export const CartDrawer: React.FC = () => {
                             <span className="total-amount">{toBanglaPrice(total)}</span>
                         </div>
                         
-                        <button className="btn btn-primary btn-block" onClick={checkout}>
+                        <button className="btn btn-primary btn-block" onClick={handleProceedCheckout}>
                             <span>Proceed to Checkout</span>
                             <CreditCard size={18} />
                         </button>

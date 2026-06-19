@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit, Inter } from "next/font/google";
 import { CartProvider } from "@/context/CartContext";
+import NextTopLoader from 'nextjs-toploader';
 import "./globals.css";
 
 const outfit = Outfit({
@@ -28,6 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${outfit.variable} ${inter.variable}`}>
       <body style={{ fontFamily: "var(--font-inter), sans-serif" }}>
+        <NextTopLoader color="var(--color-primary)" showSpinner={false} />
         <CartProvider>
           {children}
         </CartProvider>

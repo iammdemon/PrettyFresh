@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useCart } from "@/context/CartContext";
-import { Leaf, MapPin, Grid, ChevronDown, Search, X, User, ShoppingCart } from "lucide-react";
+import { Leaf, MapPin, Grid, ChevronDown, Search, X, User, ShoppingCart, ShieldCheck } from "lucide-react";
 import { toBanglaPrice } from "@/lib/bangla";
 
 export const Header: React.FC = () => {
@@ -169,6 +169,16 @@ export const Header: React.FC = () => {
 
                 {/* Action Buttons */}
                 <div className="header-actions">
+                    {user && (user.role === "super_admin" || user.role === "admin") && (
+                        <button 
+                            className="login-btn" 
+                            onClick={() => window.location.href = "/admin"}
+                            style={{ backgroundColor: "var(--color-accent-light)", color: "var(--color-primary)", borderColor: "var(--color-primary)" }}
+                        >
+                            <ShieldCheck className="icon-green" />
+                            <span>Admin</span>
+                        </button>
+                    )}
                     {user ? (
                         <button className="login-btn" onClick={() => window.location.href = "/dashboard"}>
                             <User className="icon-green" />

@@ -26,6 +26,8 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Invalid email or password" }, { status: 400 });
         }
 
+        const userRole = user.role || "customer";
+
         // Return user session payload
         const sessionUser = {
             id: user._id.toString(),
@@ -36,7 +38,8 @@ export async function POST(request: Request) {
             gender: user.gender,
             dob: user.dob,
             address: user.address,
-            provider: user.provider
+            provider: user.provider,
+            role: userRole
         };
 
         return NextResponse.json({ success: true, user: sessionUser });

@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { toBanglaPrice } from "@/lib/bangla";
 
 export interface CartItem {
-    id: number;
+    id: string;
     name: string;
     image: string;
     price: number;
@@ -19,7 +19,7 @@ interface ToastState {
 
 interface CartContextType {
     cart: CartItem[];
-    wishlist: number[];
+    wishlist: string[];
     searchQuery: string;
     setSearchQuery: (q: string) => void;
     activeFilter: string;
@@ -34,30 +34,29 @@ interface CartContextType {
     setLoginOpen: (open: boolean) => void;
     refundOpen: boolean;
     setRefundOpen: (open: boolean) => void;
-    checkoutSuccessOpen: boolean;
-    setCheckoutSuccessOpen: (open: boolean) => void;
-    
     // Order Summary
     successOrderId: string;
     successTotal: string;
+    setSuccessOrderId: (id: string) => void;
+    setSuccessTotal: (total: string) => void;
     
     // Toast Alert
     toast: ToastState;
     triggerToast: (msg: string) => void;
     
     // Actions
-    addToCart: (product: any, weight: string) => void;
+    addToCart: (product: any, weight: string, price?: number) => void;
     updateQuantity: (index: number, delta: number) => void;
     removeItem: (index: number) => void;
-    toggleWishlist: (id: number) => void;
-    checkout: () => void;
+    toggleWishlist: (id: string) => void;
+    checkout: (address: string, phone: string) => Promise<string>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [cart, setCart] = useState<CartItem[]>([]);
-    const [wishlist, setWishlist] = useState<number[]>([]);
+    const [wishlist, setWishlist] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [activeFilter, setActiveFilter] = useState("all");
     const [currentLocation, setCurrentLocation] = useState("Dhaka, Banani");
@@ -65,7 +64,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [cartOpen, setCartOpen] = useState(false);
     const [loginOpen, setLoginOpen] = useState(false);
     const [refundOpen, setRefundOpen] = useState(false);
-    const [checkoutSuccessOpen, setCheckoutSuccessOpen] = useState(false);
     
     const [successOrderId, setSuccessOrderId] = useState("");
     const [successTotal, setSuccessTotal] = useState("");
@@ -86,7 +84,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setToast({ open: true, message });
     };
 
-    const addToCart = (product: any, weight: string) => {
+    const addToCart = (product: any, weight: string, price?: number) => {
+        const itemPrice = price !== undefined ? price : product.price;
         setCart(prevCart => {
             const existingIdx = prevCart.findIndex(item => item.id === product.id && item.weight === weight);
             if (existingIdx > -1) {
@@ -98,7 +97,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     id: product.id,
                     name: product.name,
                     image: product.image,
-                    price: product.price,
+                    price: itemPrice,
                     weight,
                     quantity: 1
                 }];
@@ -129,7 +128,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
-    const toggleWishlist = (id: number) => {
+    const toggleWishlist = (id: string) => {
         setWishlist(prev => {
             if (prev.includes(id)) {
                 triggerToast("Removed from wishlist");
@@ -141,18 +140,52 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
-    const checkout = () => {
-        if (cart.length === 0) return;
+    const checkout = async (address: string, phone: string): Promise<string> => {
+        if (cart.length === 0) return "";
         
         const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         const total = subtotal + 2.00;
+        const orderId = "PF-" + Math.floor(10000 + Math.random() * 90000);
         
         setSuccessTotal(toBanglaPrice(total));
-        setSuccessOrderId("PF-" + Math.floor(10000 + Math.random() * 90000));
+        setSuccessOrderId(orderId);
+        
+        let user: any = null;
+        if (typeof window !== "undefined") {
+            const saved = localStorage.getItem("prettyfresh_user");
+            if (saved) {
+                try {
+                    user = JSON.parse(saved);
+                } catch (e) {}
+            }
+        }
+        
+        const orderData = {
+            orderId,
+            customerName: user?.name || "Guest Customer",
+            customerEmail: user?.email || "guest@prettyfresh.com",
+            customerPhone: phone || user?.phone || "Not Provided",
+            address: address || user?.address || "Not Provided",
+            items: cart,
+            subtotal,
+            deliveryFee: 2.00,
+            total,
+            status: "Pending"
+        };
+        
+        try {
+            await fetch("/api/orders", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(orderData)
+            });
+        } catch (err) {
+            console.error("Failed to submit checkout order to MongoDB:", err);
+        }
         
         setCartOpen(false);
-        setCheckoutSuccessOpen(true);
         setCart([]);
+        return orderId;
     };
 
     return (
@@ -171,10 +204,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setLoginOpen,
             refundOpen,
             setRefundOpen,
-            checkoutSuccessOpen,
-            setCheckoutSuccessOpen,
             successOrderId,
             successTotal,
+            setSuccessOrderId,
+            setSuccessTotal,
             toast,
             triggerToast,
             addToCart,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useCart } from "@/context/CartContext";
 import { Heart, ChevronDown, ShoppingCart, SearchCode } from "lucide-react";
@@ -8,84 +8,102 @@ import { toBanglaPrice } from "@/lib/bangla";
 
 export const PRODUCTS = [
     {
-        id: 1,
+        id: "64a7c1b50000000000000001",
         name: "Fresh Red Tomatoes",
         category: "vegetables",
         image: "https://images.unsplash.com/photo-1595855759920-86582396756a?w=400&auto=format&fit=crop&q=80",
-        price: 1.49,
-        discountPrice: 1.99,
+        variants: [
+            { weight: "500g", price: 0.79, discountPrice: 0.99 },
+            { weight: "1kg", price: 1.49, discountPrice: 1.99 },
+            { weight: "2kg", price: 2.89, discountPrice: 3.89 }
+        ],
         badge: "Organic",
-        weights: ["500g", "1kg", "2kg"]
+        freshness: "Morning Harvest"
     },
     {
-        id: 2,
+        id: "64a7c1b50000000000000002",
         name: "Organic Sweet Carrots",
         category: "vegetables",
         image: "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=400&auto=format&fit=crop&q=80",
-        price: 1.99,
-        discountPrice: 2.49,
+        variants: [
+            { weight: "1kg", price: 1.99, discountPrice: 2.49 },
+            { weight: "2kg", price: 3.80, discountPrice: 4.80 }
+        ],
         badge: "Farm Fresh",
-        weights: ["1kg", "2kg"]
+        freshness: "Morning Harvest"
     },
     {
-        id: 3,
+        id: "64a7c1b50000000000000003",
         name: "Crisp Royal Gala Apples",
         category: "fruits",
         image: "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&auto=format&fit=crop&q=80",
-        price: 2.99,
-        discountPrice: 3.49,
+        variants: [
+            { weight: "1kg", price: 2.99, discountPrice: 3.49 },
+            { weight: "1.5kg", price: 4.39, discountPrice: 5.19 },
+            { weight: "3kg", price: 8.50, discountPrice: 10.00 }
+        ],
         badge: "Imported",
-        weights: ["1kg", "1.5kg", "3kg"]
+        freshness: "Morning Harvest"
     },
     {
-        id: 4,
+        id: "64a7c1b50000000000000004",
         name: "Premium Bananas",
         category: "fruits",
         image: "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=400&auto=format&fit=crop&q=80",
-        price: 1.29,
-        discountPrice: 1.59,
+        variants: [
+            { weight: "6 Pcs", price: 0.69, discountPrice: 0.85 },
+            { weight: "1 Dozen", price: 1.29, discountPrice: 1.59 }
+        ],
         badge: "15% OFF",
-        weights: ["1 Dozen", "6 Pcs"]
+        freshness: "Morning Harvest"
     },
     {
-        id: 5,
+        id: "64a7c1b50000000000000005",
         name: "Farm Fresh Whole Milk",
         category: "dairy",
         image: "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400&auto=format&fit=crop&q=80",
-        price: 1.89,
-        discountPrice: 2.19,
+        variants: [
+            { weight: "1L", price: 1.89, discountPrice: 2.19 },
+            { weight: "2L", price: 3.60, discountPrice: 4.20 }
+        ],
         badge: "Pasteurized",
-        weights: ["1L", "2L"]
+        freshness: "Morning Harvest"
     },
     {
-        id: 6,
+        id: "64a7c1b50000000000000006",
         name: "Organic Brown Eggs",
         category: "dairy",
         image: "https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=400&auto=format&fit=crop&q=80",
-        price: 2.49,
-        discountPrice: 2.99,
+        variants: [
+            { weight: "6 Pcs", price: 1.30, discountPrice: 1.60 },
+            { weight: "12 Pcs", price: 2.49, discountPrice: 2.99 }
+        ],
         badge: "Free Range",
-        weights: ["12 Pcs", "6 Pcs"]
+        freshness: "Morning Harvest"
     },
     {
-        id: 7,
+        id: "64a7c1b50000000000000007",
         name: "Fresh Boneless Chicken Breast",
         category: "grocery",
         image: "https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=400&auto=format&fit=crop&q=80",
-        price: 4.99,
-        discountPrice: 5.99,
+        variants: [
+            { weight: "500g", price: 2.60, discountPrice: 3.10 },
+            { weight: "1kg", price: 4.99, discountPrice: 5.99 }
+        ],
         badge: "Antibiotic-Free",
-        weights: ["1kg", "500g"]
+        freshness: "Morning Harvest"
     },
     {
-        id: 8,
+        id: "64a7c1b50000000000000008",
         name: "Atlantic Salmon Fillet",
         category: "grocery",
         image: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=400&auto=format&fit=crop&q=80",
-        price: 8.99,
-        discountPrice: 10.99,
+        variants: [
+            { weight: "500g", price: 4.60, discountPrice: 5.60 },
+            { weight: "1kg", price: 8.99, discountPrice: 10.99 }
+        ],
         badge: "Chilled",
-        weights: ["500g", "1kg"]
+        freshness: "Morning Harvest"
     }
 ];
 
@@ -99,34 +117,78 @@ export const FeaturedProducts: React.FC = () => {
         setActiveFilter
     } = useCart();
 
-    const [selectedWeights, setSelectedWeights] = useState<Record<number, string>>({
-        1: "500g",
-        2: "1kg",
-        3: "1kg",
-        4: "1 Dozen",
-        5: "1L",
-        6: "12 Pcs",
-        7: "1kg",
-        8: "500g"
-    });
+    const [productsList, setProductsList] = useState<any[]>(PRODUCTS);
+    const [selectedWeights, setSelectedWeights] = useState<Record<string, string>>({});
+    const [categories, setCategories] = useState<{code: string, name: string, id: string}[]>([]);
 
-    const handleWeightChange = (productId: number, weight: string) => {
+    useEffect(() => {
+        // Fetch products
+        fetch("/api/products")
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && Array.isArray(data.products)) {
+                    // Filter out daily-bazaar items for this component
+                    const featured = data.products.filter((p: any) => {
+                        // Keep backwards compatibility for daily-bazaar (might be by code or by dynamic id)
+                        // If it has code 'daily-bazaar', we filter it later based on actual categories.
+                        // For now we trust the filter logic below, but we exclude hardcoded "daily-bazaar" as fallback.
+                        return p.category !== "daily-bazaar";
+                    }).map((p: any) => ({ ...p, id: p._id || p.id }));
+                    setProductsList(featured);
+                }
+            })
+            .catch(err => console.error("Error fetching products:", err));
+
+        // Fetch categories
+        fetch("/api/categories")
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && Array.isArray(data.categories)) {
+                    const mappedCats = data.categories.map((c: any) => ({
+                        code: c.code,
+                        name: c.name,
+                        id: c._id
+                    }));
+                    setCategories(mappedCats);
+                }
+            })
+            .catch(err => console.error("Error fetching categories:", err));
+    }, []);
+
+    const handleWeightChange = (productId: string, weight: string) => {
         setSelectedWeights(prev => ({ ...prev, [productId]: weight }));
     };
 
-    const filtered = PRODUCTS.filter(p => {
-        const matchesCategory = activeFilter === "all" || p.category === activeFilter;
+    const filtered = productsList.filter(p => {
+        // Filter out daily-bazaar dynamically if we have categories
+        const dailyBazaarCat = categories.find(c => c.code === "daily-bazaar");
+        if (dailyBazaarCat && p.category === dailyBazaarCat.id) {
+            return false;
+        }
+
+        const matchesCategory = activeFilter === "all" || p.category === activeFilter || p.category === categories.find(c => c.id === activeFilter)?.code;
         const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
         return matchesCategory && matchesSearch;
     });
 
+    // Dynamic filters
     const filters = [
-        { code: "all", name: "All Products" },
-        { code: "vegetables", name: "Vegetables" },
-        { code: "fruits", name: "Fruits" },
-        { code: "dairy", name: "Dairy" },
-        { code: "grocery", name: "Grocery" }
+        { id: "all", name: "All Products" },
+        ...categories.filter(c => c.code !== "daily-bazaar").map(c => ({
+            id: c.id,
+            name: c.name
+        }))
     ];
+    
+    // Fallback if categories are not loaded yet
+    if (filters.length === 1 && categories.length === 0) {
+        filters.push(
+            { id: "vegetables", name: "Vegetables" },
+            { id: "fruits", name: "Fruits" },
+            { id: "dairy", name: "Dairy" },
+            { id: "grocery", name: "Grocery" }
+        );
+    }
 
     return (
         <section className="featured-products-section" id="featured-products-section">
@@ -141,11 +203,11 @@ export const FeaturedProducts: React.FC = () => {
                     <div className="product-filters" role="tablist">
                         {filters.map(f => (
                             <button 
-                                key={f.code}
-                                className={`filter-tab ${activeFilter === f.code ? "active" : ""}`}
-                                onClick={() => setActiveFilter(f.code)}
+                                key={f.id}
+                                className={`filter-tab ${activeFilter === f.id ? "active" : ""}`}
+                                onClick={() => setActiveFilter(f.id)}
                                 role="tab" 
-                                aria-selected={activeFilter === f.code}
+                                aria-selected={activeFilter === f.id}
                             >
                                 {f.name}
                             </button>
@@ -163,11 +225,18 @@ export const FeaturedProducts: React.FC = () => {
                     ) : (
                         filtered.map(p => {
                             const isWished = wishlist.includes(p.id);
-                            const currentWeight = selectedWeights[p.id] || p.weights[0];
+                            
+                            // Compatibility logic for legacy data schema vs new variants schema
+                            const variants = Array.isArray(p.variants) && p.variants.length > 0 
+                                ? p.variants 
+                                : [{ weight: p.weights?.[0] || p.weight || "1kg", price: p.price, discountPrice: p.discountPrice }];
+                                
+                            const currentWeight = selectedWeights[p.id] || variants[0].weight;
+                            const activeVariant = variants.find((v: any) => v.weight === currentWeight) || variants[0];
                             
                             return (
                                 <div key={p.id} className="product-card">
-                                    <span className="product-badge">{p.badge}</span>
+                                    {p.badge && <span className="product-badge">{p.badge}</span>}
                                     <button 
                                         className={`wishlist-btn ${isWished ? "active" : ""}`} 
                                         onClick={() => toggleWishlist(p.id)}
@@ -199,21 +268,23 @@ export const FeaturedProducts: React.FC = () => {
                                             onChange={(e) => handleWeightChange(p.id, e.target.value)}
                                             aria-label="Product weight"
                                         >
-                                            {p.weights.map(w => (
-                                                <option key={w} value={w}>{w}</option>
+                                            {variants.map((v: any) => (
+                                                <option key={v.weight} value={v.weight}>{v.weight}</option>
                                             ))}
                                         </select>
                                         <ChevronDown className="weight-chevron" />
                                     </div>
                                     
                                     <div className="product-price-row">
-                                        <span className="price-current">{toBanglaPrice(p.price)}</span>
-                                        <span className="price-discount">{toBanglaPrice(p.discountPrice)}</span>
+                                        <span className="price-current">{toBanglaPrice(activeVariant.price)}</span>
+                                        {activeVariant.discountPrice && (
+                                            <span className="price-discount">{toBanglaPrice(activeVariant.discountPrice)}</span>
+                                        )}
                                     </div>
                                     
                                     <button 
                                         className="btn add-cart-btn" 
-                                        onClick={() => addToCart(p, currentWeight)}
+                                        onClick={() => addToCart(p, currentWeight, activeVariant.price)}
                                     >
                                         <ShoppingCart size={18} />
                                         <span>Add to Cart</span>

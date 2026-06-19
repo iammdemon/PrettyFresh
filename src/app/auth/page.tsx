@@ -2,15 +2,15 @@
 
 import React, { useState } from "react";
 import { 
-    WelcomeScreen, LoginScreen, OtpScreen, RegisterScreen, 
+    LoginScreen, OtpScreen, RegisterScreen, 
     CompleteProfileScreen, AddressSetupScreen, ForgotLoginScreen, AccountSuccessScreen 
 } from "@/components/AuthScreens";
 
-type AuthScreenState = "welcome" | "login" | "otp" | "register" | "profile" | "address" | "forgot" | "success";
+type AuthScreenState = "login" | "otp" | "register" | "profile" | "address" | "forgot" | "success";
 
 export default function AuthPage() {
-    const [screen, setScreen] = useState<AuthScreenState>("welcome");
-    const [history, setHistory] = useState<AuthScreenState[]>(["welcome"]);
+    const [screen, setScreen] = useState<AuthScreenState>("login");
+    const [history, setHistory] = useState<AuthScreenState[]>(["login"]);
 
     // Temporary User contexts
     const [mobileNumber, setMobileNumber] = useState("");
@@ -42,7 +42,6 @@ export default function AuthPage() {
     // Calculate onboarding step progress bar values
     const getProgress = () => {
         switch (screen) {
-            case "welcome": return 10;
             case "login": return 25;
             case "forgot": return 25;
             case "otp": return 45;
@@ -107,7 +106,8 @@ export default function AuthPage() {
             gender: gender || "Not Specified",
             dob: dob || "",
             address: fullAddress,
-            provider: "Email & Password"
+            provider: "Email & Password",
+            role: "customer"
         };
         
         if (typeof window !== "undefined") {
@@ -130,8 +130,6 @@ export default function AuthPage() {
     // Screen Selector compiles correct layouts
     const renderActiveScreen = () => {
         switch (screen) {
-            case "welcome":
-                return <WelcomeScreen onNavigate={(s) => navigateTo(s as AuthScreenState)} />;
             case "login":
                 return (
                     <LoginScreen 
@@ -186,7 +184,8 @@ export default function AuthPage() {
                                 gender: gender || "Not Specified",
                                 dob: dob || "",
                                 address: "Not Provided",
-                                provider: "Email & Password"
+                                provider: "Email & Password",
+                                role: "customer"
                             };
                             if (typeof window !== "undefined") {
                                 localStorage.setItem("prettyfresh_user", JSON.stringify(userData));
@@ -208,7 +207,15 @@ export default function AuthPage() {
             case "success":
                 return <AccountSuccessScreen />;
             default:
-                return <WelcomeScreen onNavigate={(s) => navigateTo(s as AuthScreenState)} />;
+                return (
+                    <LoginScreen 
+                        onBack={navigateBack} 
+                        onNext={handleLoginContinue} 
+                        onLoginSuccess={handleLoginSuccess}
+                        onForgotLink={() => navigateTo("forgot")}
+                        onRegisterLink={() => navigateTo("register")} 
+                    />
+                );
         }
     };
 

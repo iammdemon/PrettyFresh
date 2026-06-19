@@ -23,6 +23,7 @@ export async function POST(request: Request) {
         // Hash password securely with native Node.js crypto
         const hashedPassword = crypto.createHash("sha256").update(password).digest("hex");
 
+
         const newUser = {
             name,
             phone,
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
             dob: "",
             address: "Not Provided",
             provider: "Email & Password",
+            role: "customer",
             createdAt: new Date()
         };
 
@@ -48,7 +50,8 @@ export async function POST(request: Request) {
             gender: newUser.gender,
             dob: newUser.dob,
             address: newUser.address,
-            provider: newUser.provider
+            provider: newUser.provider,
+            role: newUser.role
         };
 
         return NextResponse.json({ success: true, user: sessionUser });

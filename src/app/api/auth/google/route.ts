@@ -27,7 +27,8 @@ export async function POST(request: Request) {
                 gender: "Not Specified",
                 dob: "",
                 address: "Not Provided",
-                createdAt: new Date()
+                createdAt: new Date(),
+                role: "customer"
             }
         };
 
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
             gender: user.gender || "Not Specified",
             dob: user.dob || "",
             address: user.address || "Not Provided",
-            provider: user.provider
+            role: user.role || "customer"
         };
 
         return NextResponse.json({ success: true, user: sessionUser });
