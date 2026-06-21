@@ -16,7 +16,8 @@ if (getApps().length === 0) {
         }),
       });
     } else {
-      console.warn('Firebase Admin credentials are not fully set in environment variables.');
+      console.warn('Firebase Admin credentials are not fully set in environment variables. Initializing empty app for build phase.');
+      initializeApp({ projectId: projectId || 'demo-project' });
     }
   } catch (error) {
     console.error('Firebase admin initialization error', error);
@@ -24,3 +25,4 @@ if (getApps().length === 0) {
 }
 
 export const messaging = getMessaging();
+
