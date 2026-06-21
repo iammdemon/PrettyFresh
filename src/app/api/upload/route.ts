@@ -1,7 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { getUserFromRequest } from "@/lib/auth";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
+        const userPayload = await getUserFromRequest(request);
+        if (!userPayload) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
         const formData = await request.formData();
         const image = formData.get("image");
 

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { X, PartyPopper, CheckCircle } from "lucide-react";
 import { toBanglaNumber } from "@/lib/bangla";
 import { LoginScreen, RegisterScreen, ForgotLoginScreen } from "@/components/AuthScreens";
@@ -29,10 +30,10 @@ export const Modals: React.FC = () => {
         setAuthView("login");
     };
 
+    const { login } = useAuth();
+
     const handleAuthSuccess = (userData: any) => {
-        if (typeof window !== "undefined") {
-            localStorage.setItem("prettyfresh_user", JSON.stringify(userData));
-        }
+        login(userData);
         triggerToast("Logged in successfully!");
         setLoginOpen(false);
         setAuthView("login");
@@ -51,9 +52,7 @@ export const Modals: React.FC = () => {
             role: "customer"
         };
         
-        if (typeof window !== "undefined") {
-            localStorage.setItem("prettyfresh_user", JSON.stringify(userData));
-        }
+        login(userData);
 
         try {
             await fetch("/api/user/profile", {

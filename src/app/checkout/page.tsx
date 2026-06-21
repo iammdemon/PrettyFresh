@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { toBanglaPrice, toBanglaNumber } from "@/lib/bangla";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, MapPin, Phone, CreditCard } from "lucide-react";
@@ -15,24 +16,39 @@ export default function CheckoutPage() {
     const [newAddress, setNewAddress] = useState("");
     const [newPhone, setNewPhone] = useState("");
     const [loading, setLoading] = useState(false);
+    
+    // Wallet States
+    const [walletBalance, setWalletBalance] = useState<number | null>(null);
+    const [paymentMethod, setPaymentMethod] = useState<"COD" | "Wallet">("COD");
 
     const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const deliveryFee = 2.00;
     const total = subtotal + deliveryFee;
 
+    const { user: authUser, isLoading } = useAuth();
+    
     useEffect(() => {
-        if (typeof window !== "undefined") {
-            const saved = localStorage.getItem("prettyfresh_user");
-            if (saved) {
-                try {
-                    setSavedUser(JSON.parse(saved));
-                } catch(e) {}
+        if (!isLoading) {
+            if (authUser) {
+                // Onboarding Guard
+                if (!authUser.phone || authUser.phone === "" || !authUser.address || authUser.address === "Not Provided") {
+                    window.location.href = "/onboarding";
+                    return;
+                }
+                setSavedUser(authUser);
+                
+                // Fetch wallet balance
+                fetch(`/api/user/wallet?email=${encodeURIComponent(authUser.email)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) setWalletBalance(data.walletBalance);
+                    });
             } else {
                 router.push("/auth");
             }
         }
-    }, [router]);
+    }, [authUser, isLoading, router]);
 
     const handleCheckoutSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -53,7 +69,40 @@ export default function CheckoutPage() {
             return;
         }
 
-        const orderId = await checkout(targetAddress, targetPhone);
+        // Handle Wallet Payment
+        if (paymentMethod === "Wallet") {
+            if (walletBalance === null || walletBalance < total) {
+                triggerToast("Insufficient wallet balance.");
+                setLoading(false);
+                return;
+            }
+            
+            try {
+                const res = await fetch("/api/user/wallet/transaction", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email: savedUser.email,
+                        amount: total,
+                        type: "purchase",
+                        description: `Paid for order (Subtotal: ${subtotal}, Delivery: ${deliveryFee})`
+                    })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    triggerToast(data.error || "Failed to process wallet payment.");
+                    setLoading(false);
+                    return;
+                }
+            } catch (err) {
+                console.error("Wallet checkout error:", err);
+                triggerToast("An error occurred during payment.");
+                setLoading(false);
+                return;
+            }
+        }
+
+        const orderId = await checkout(targetAddress, targetPhone, paymentMethod);
         
         if (orderId) {
             router.push(`/checkout/success?orderId=${orderId}`);
@@ -152,12 +201,50 @@ export default function CheckoutPage() {
                             
                             <div style={{ marginTop: "32px" }}>
                                 <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "16px" }}>Payment Method</h3>
-                                <div style={{ padding: "16px", border: "1px solid var(--color-primary)", borderRadius: "12px", background: "var(--color-primary-light)", display: "flex", alignItems: "center", gap: "12px" }}>
-                                    <CreditCard size={24} color="var(--color-primary)" />
-                                    <div>
-                                        <div style={{ fontWeight: 700, color: "var(--color-primary)" }}>Cash on Delivery</div>
-                                        <div style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>Pay when you receive your order</div>
-                                    </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                                    <label style={{ 
+                                        padding: "16px", 
+                                        border: `1px solid ${paymentMethod === "COD" ? "var(--color-primary)" : "var(--color-border)"}`, 
+                                        borderRadius: "12px", 
+                                        background: paymentMethod === "COD" ? "var(--color-primary-light)" : "transparent", 
+                                        display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", transition: "all 0.2s" 
+                                    }}>
+                                        <input type="radio" checked={paymentMethod === "COD"} onChange={() => setPaymentMethod("COD")} style={{ accentColor: "var(--color-primary)", width: "18px", height: "18px" }} />
+                                        <CreditCard size={24} color={paymentMethod === "COD" ? "var(--color-primary)" : "var(--color-text-muted)"} />
+                                        <div>
+                                            <div style={{ fontWeight: 700, color: paymentMethod === "COD" ? "var(--color-primary)" : "var(--color-text)" }}>Cash on Delivery</div>
+                                            <div style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>Pay when you receive your order</div>
+                                        </div>
+                                    </label>
+                                    
+                                    <label style={{ 
+                                        padding: "16px", 
+                                        border: `1px solid ${paymentMethod === "Wallet" ? "var(--color-primary)" : "var(--color-border)"}`, 
+                                        borderRadius: "12px", 
+                                        background: paymentMethod === "Wallet" ? "var(--color-primary-light)" : "transparent", 
+                                        display: "flex", alignItems: "center", gap: "12px", 
+                                        cursor: (walletBalance !== null && walletBalance >= total) ? "pointer" : "not-allowed", 
+                                        opacity: (walletBalance !== null && walletBalance >= total) ? 1 : 0.6,
+                                        transition: "all 0.2s" 
+                                    }}>
+                                        <input 
+                                            type="radio" 
+                                            checked={paymentMethod === "Wallet"} 
+                                            onChange={() => { if (walletBalance !== null && walletBalance >= total) setPaymentMethod("Wallet") }} 
+                                            disabled={walletBalance === null || walletBalance < total}
+                                            style={{ accentColor: "var(--color-primary)", width: "18px", height: "18px" }} 
+                                        />
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={paymentMethod === "Wallet" ? "var(--color-primary)" : "var(--color-text-muted)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                                        <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                            <div>
+                                                <div style={{ fontWeight: 700, color: paymentMethod === "Wallet" ? "var(--color-primary)" : "var(--color-text)" }}>Pay with Wallet</div>
+                                                <div style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>Available Balance: {walletBalance !== null ? toBanglaPrice(walletBalance) : "..."}</div>
+                                            </div>
+                                            {(walletBalance !== null && walletBalance < total) && (
+                                                <span style={{ fontSize: "0.75rem", color: "#d32f2f", backgroundColor: "#ffcdd2", padding: "4px 8px", borderRadius: "4px", fontWeight: 700 }}>Insufficient Funds</span>
+                                            )}
+                                        </div>
+                                    </label>
                                 </div>
                             </div>
                         </form>

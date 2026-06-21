@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import crypto from "crypto";
+import { signToken } from "@/lib/auth";
 
 export async function POST(request: Request) {
     try {
@@ -42,7 +43,28 @@ export async function POST(request: Request) {
             role: userRole
         };
 
-        return NextResponse.json({ success: true, user: sessionUser });
+        const token = await signToken({
+            id: sessionUser.id,
+            email: sessionUser.email,
+            role: sessionUser.role,
+            name: sessionUser.name
+        });
+
+        // Create the response
+        const response = NextResponse.json({ success: true, user: sessionUser, token });
+
+        // Set HttpOnly cookie for Web App
+        response.cookies.set({
+            name: 'token',
+            value: token,
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 7 * 24 * 60 * 60 // 7 days
+        });
+
+        return response;
     } catch (e: any) {
         console.error("API Auth Login Error:", e);
         return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 });

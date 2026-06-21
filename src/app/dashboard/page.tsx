@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from "react";
 import { 
     User, Mail, Phone, MapPin, ShoppingBag, Award, Clock, 
-    ArrowLeft, LogOut, CheckCircle, Package, Truck, Smile, RefreshCw
+    ArrowLeft, LogOut, CheckCircle, Package, Truck, Smile, RefreshCw, Plus
 } from "lucide-react";
+import { toast } from "react-hot-toast";
 import { toBanglaNumber, toBanglaPrice } from "@/lib/bangla";
 
 interface UserProfile {
@@ -18,35 +19,31 @@ interface UserProfile {
     provider?: string;
 }
 
+import { useAuth } from "@/context/AuthContext";
+
 export default function CustomerDashboard() {
-    const [user, setUser] = useState<UserProfile | null>(null);
+    const { user, isLoading, logout } = useAuth();
     const [activeTab, setActiveTab] = useState<"overview" | "orders" | "addresses">("overview");
     const [orders, setOrders] = useState<any[]>([]);
+    
+    // Wallet States
+    const [walletBalance, setWalletBalance] = useState(0);
+    const [transactions, setTransactions] = useState<any[]>([]);
+    const [isAddMoneyModalOpen, setIsAddMoneyModalOpen] = useState(false);
+    const [addAmount, setAddAmount] = useState("");
+    const [bkashNumber, setBkashNumber] = useState("");
+    const [bkashTrxId, setBkashTrxId] = useState("");
+    const [isAdding, setIsAdding] = useState(false);
 
     useEffect(() => {
-        if (typeof window !== "undefined") {
-            const saved = localStorage.getItem("prettyfresh_user");
-            if (saved) {
-                try {
-                    setUser(JSON.parse(saved));
-                } catch (e) {
-                    console.error("Error parsing user context:", e);
-                }
-            } else {
-                // Fallback default mock user details for preview
-                setUser({
-                    name: "Sajib Hassan",
-                    email: "sajib.hassan@example.com",
-                    phone: "01712345678",
-                    avatar: "/assets/default-avatar.png",
-                    gender: "Male",
-                    dob: "1994-06-12",
-                    address: "Flat 4B, Building 12, Gulshan 2 Central Park Road, Dhaka",
-                    provider: "Google (Demo Session)"
-                });
+        if (!isLoading) {
+            if (!user) {
+                window.location.href = "/auth";
+            } else if (!user.phone || user.phone === "" || !user.address || user.address === "Not Provided") {
+                window.location.href = "/onboarding";
             }
         }
-    }, []);
+    }, [user, isLoading]);
 
     useEffect(() => {
         if (user && user.email) {
@@ -58,14 +55,69 @@ export default function CustomerDashboard() {
                     }
                 })
                 .catch(err => console.error("Error fetching orders:", err));
+                
+            fetchWalletData(user.email);
         }
     }, [user]);
 
-    const handleLogout = () => {
-        if (typeof window !== "undefined") {
-            localStorage.removeItem("prettyfresh_user");
-            window.location.href = "/auth";
+    const fetchWalletData = (email: string) => {
+        fetch(`/api/user/wallet?email=${encodeURIComponent(email)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    setWalletBalance(data.walletBalance);
+                    setTransactions(data.transactions);
+                }
+            })
+            .catch(err => console.error("Error fetching wallet data:", err));
+    };
+
+    const handleAddMoney = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!addAmount || isNaN(Number(addAmount)) || Number(addAmount) <= 0) {
+            toast.error("Please enter a valid amount.");
+            return;
         }
+        if (!bkashNumber || !bkashTrxId) {
+            toast.error("Please enter your bKash number and Transaction ID.");
+            return;
+        }
+        
+        setIsAdding(true);
+        try {
+            const res = await fetch("/api/user/wallet/transaction", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: user!.email,
+                    amount: addAmount,
+                    type: "deposit",
+                    description: "Added funds via bKash",
+                    accountNumber: bkashNumber,
+                    trxId: bkashTrxId
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setTransactions([data.transaction, ...transactions]);
+                setIsAddMoneyModalOpen(false);
+                setAddAmount("");
+                setBkashNumber("");
+                setBkashTrxId("");
+                toast.success("Deposit request submitted successfully! Funds will be added once approved by an admin.", { duration: 4000 });
+            } else {
+                toast.error(data.error || "Failed to submit request");
+            }
+        } catch (err) {
+            console.error("Add money error:", err);
+            toast.error("An error occurred");
+        } finally {
+            setIsAdding(false);
+        }
+    };
+
+    const handleLogout = async () => {
+        await logout();
     };
 
     if (!user) return null;
@@ -387,13 +439,67 @@ export default function CustomerDashboard() {
                                             </div>
                                             <div>
                                                 <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>Out for Delivery</div>
-                                                <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>Heading to you</span>
+                                                <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
+                                                    {activeOrder.riderName 
+                                                        ? `Rider ${activeOrder.riderName} is heading to you (${!activeOrder.riderPhone || activeOrder.riderPhone === "Not Configured" ? "Number Unavailable" : `Call: ${toBanglaNumber(activeOrder.riderPhone)}`})` 
+                                                        : "Heading to you"
+                                                    }
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             );
                         })()}
+
+                        {/* 3. Monthly Bazaar Card */}
+                        <div style={{ 
+                            backgroundColor: "var(--color-white)", 
+                            borderRadius: "var(--radius-md)", 
+                            padding: "24px",
+                            boxShadow: "var(--shadow-sm)",
+                            border: "1px solid var(--color-border)",
+                            display: "flex",
+                            flexDirection: "column"
+                        }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+                                <div style={{ 
+                                    width: "48px", 
+                                    height: "48px", 
+                                    borderRadius: "12px", 
+                                    backgroundColor: "rgba(139, 195, 74, 0.15)", // Lime accent
+                                    color: "var(--color-primary)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center"
+                                }}>
+                                    <ShoppingBag size={24} />
+                                </div>
+                                <div>
+                                    <h3 style={{ fontSize: "1.1rem" }}>Monthly Bazaar Builder</h3>
+                                    <span style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>Automate your grocery</span>
+                                </div>
+                            </div>
+                            <p style={{ color: "var(--color-text-muted)", fontSize: "0.9rem", marginBottom: "20px", flex: 1 }}>
+                                Create your monthly grocery template. You can upload a handwritten list using our AI or build it manually, then set it to auto-deliver.
+                            </p>
+                            <div style={{ display: "flex", gap: "12px" }}>
+                                <button 
+                                    onClick={() => window.location.href = "/dashboard/bazaar"}
+                                    className="btn btn-secondary" 
+                                    style={{ flex: 1, padding: "10px", fontSize: "0.9rem" }}
+                                >
+                                    My Bazaars
+                                </button>
+                                <button 
+                                    onClick={() => window.location.href = "/bazaar"}
+                                    className="btn btn-primary" 
+                                    style={{ flex: 1, padding: "10px", fontSize: "0.9rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
+                                >
+                                    <Plus size={16} /> New List
+                                </button>
+                            </div>
+                        </div>
 
                     </div>
 
@@ -424,6 +530,74 @@ export default function CustomerDashboard() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+
+                    {/* 2.5 Wallet Section */}
+                    <div style={{ 
+                        backgroundColor: "var(--color-white)", 
+                        borderRadius: "var(--radius-md)", 
+                        padding: "24px",
+                        boxShadow: "var(--shadow-sm)",
+                        border: "1px solid var(--color-border)"
+                    }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                            <h3 style={{ fontSize: "1.2rem", display: "flex", alignItems: "center", gap: "8px" }}>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                                My Wallet
+                            </h3>
+                            <button 
+                                className="btn btn-primary" 
+                                style={{ padding: "8px 16px", fontSize: "0.9rem" }}
+                                onClick={() => setIsAddMoneyModalOpen(true)}
+                            >
+                                <Plus size={16} />
+                                ADD Money
+                            </button>
+                        </div>
+                        
+                        <div style={{ 
+                            background: "linear-gradient(135deg, #f1f8e9, #c8e6c9)", 
+                            borderRadius: "var(--radius-sm)", 
+                            padding: "24px", 
+                            display: "flex", 
+                            justifyContent: "space-between", 
+                            alignItems: "center",
+                            marginBottom: "24px",
+                            border: "1px solid #a5d6a7"
+                        }}>
+                            <div>
+                                <span style={{ fontSize: "0.85rem", color: "#2e7d32", fontWeight: 700, textTransform: "uppercase" }}>Available Balance</span>
+                                <h2 style={{ fontSize: "2rem", margin: "8px 0 0 0", color: "#1b5e20" }}>{toBanglaPrice(walletBalance)}</h2>
+                            </div>
+                        </div>
+
+                        {transactions.length > 0 ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                                <h4 style={{ fontSize: "0.95rem", color: "var(--color-text-muted)", marginBottom: "8px" }}>Recent Transactions</h4>
+                                {transactions.slice(0, 5).map((txn, idx) => (
+                                    <div key={idx} style={{ 
+                                        display: "flex", 
+                                        justifyContent: "space-between", 
+                                        alignItems: "center", 
+                                        padding: "12px", 
+                                        backgroundColor: "var(--color-bg)", 
+                                        borderRadius: "var(--radius-sm)" 
+                                    }}>
+                                        <div>
+                                            <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--color-text)", textTransform: "capitalize" }}>{txn.type}</div>
+                                            <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)", marginTop: "4px" }}>{txn.description} • {new Date(txn.createdAt).toLocaleDateString()}</div>
+                                        </div>
+                                        <div style={{ fontWeight: 700, color: txn.status === "pending" ? "#f57c00" : (["deposit", "cashback", "refund"].includes(txn.type) ? "var(--color-primary)" : "#d32f2f") }}>
+                                            {txn.status === "pending" ? "(Pending)" : (["deposit", "cashback", "refund"].includes(txn.type) ? "+" : "-")} {toBanglaPrice(txn.amount)}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{ padding: "20px", textAlign: "center", color: "var(--color-text-muted)", backgroundColor: "var(--color-bg)", borderRadius: "var(--radius-sm)" }}>
+                                No wallet transactions yet.
+                            </div>
+                        )}
                     </div>
 
                     {/* 3. Past Orders Section */}
@@ -493,6 +667,87 @@ export default function CustomerDashboard() {
                 </div>
 
             </main>
+
+            {/* Add Money Modal */}
+            {isAddMoneyModalOpen && (
+                <div style={{ 
+                    position: "fixed", top: 0, left: 0, right: 0, bottom: 0, 
+                    backgroundColor: "rgba(0,0,0,0.5)", zIndex: 9999,
+                    display: "flex", alignItems: "center", justifyContent: "center", padding: "24px"
+                }}>
+                    <div style={{ 
+                        backgroundColor: "white", padding: "32px", borderRadius: "var(--radius-lg)", 
+                        width: "100%", maxWidth: "400px", position: "relative"
+                    }}>
+                        <button 
+                            onClick={() => setIsAddMoneyModalOpen(false)}
+                            style={{ position: "absolute", top: "16px", right: "16px", background: "none", border: "none", cursor: "pointer", color: "var(--color-text-muted)" }}
+                        >
+                            <LogOut size={20} />
+                        </button>
+                        <h2 style={{ fontSize: "1.25rem", marginBottom: "8px" }}>ADD Money via bKash</h2>
+                        <div style={{ backgroundColor: "var(--color-bg-light)", padding: "16px", borderRadius: "8px", marginBottom: "24px" }}>
+                            <p style={{ fontSize: "0.85rem", color: "var(--color-text-muted)", marginBottom: "8px" }}>
+                                1. Go to your bKash App and select <strong>Send Money</strong>
+                            </p>
+                            <p style={{ fontSize: "0.85rem", color: "var(--color-text-muted)", marginBottom: "8px" }}>
+                                2. Send the desired amount to our Official Merchant Number: <strong style={{ color: "var(--color-text)", fontSize: "0.9rem" }}>01700-000000</strong>
+                            </p>
+                            <p style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>
+                                3. Copy the <strong>Transaction ID (TrxID)</strong> and fill out the form below.
+                            </p>
+                        </div>
+                        
+                        <form onSubmit={handleAddMoney} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                            <div>
+                                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "8px" }}>Sent Amount (৳)</label>
+                                <input 
+                                    type="number" 
+                                    value={addAmount}
+                                    onChange={(e) => setAddAmount(e.target.value)}
+                                    placeholder="e.g. 500"
+                                    min="1"
+                                    style={{ width: "100%", padding: "12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)", fontSize: "1rem", outline: "none" }}
+                                    required
+                                />
+                            </div>
+                            
+                            <div>
+                                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "8px" }}>Your bKash Account Number</label>
+                                <input 
+                                    type="tel" 
+                                    value={bkashNumber}
+                                    onChange={(e) => setBkashNumber(e.target.value)}
+                                    placeholder="e.g. 017XXXXXXXX"
+                                    style={{ width: "100%", padding: "12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)", fontSize: "1rem", outline: "none" }}
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "8px" }}>Transaction ID (TrxID)</label>
+                                <input 
+                                    type="text" 
+                                    value={bkashTrxId}
+                                    onChange={(e) => setBkashTrxId(e.target.value)}
+                                    placeholder="e.g. 8K42LMP9A"
+                                    style={{ width: "100%", padding: "12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)", fontSize: "1rem", outline: "none" }}
+                                    required
+                                />
+                            </div>
+                            
+                            <button 
+                                type="submit" 
+                                disabled={isAdding}
+                                className="btn btn-primary" 
+                                style={{ width: "100%", padding: "14px", fontSize: "1rem", marginTop: "8px" }}
+                            >
+                                {isAdding ? "Submitting..." : "Submit Payment Request"}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

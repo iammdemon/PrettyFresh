@@ -1,9 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+import { getUserFromRequest } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
+        const userPayload = await getUserFromRequest(request);
+        if (!userPayload || (userPayload.role !== "admin" && userPayload.role !== "super_admin")) {
+            return NextResponse.json({ error: "Forbidden: Admin privileges required" }, { status: 403 });
+        }
+
         const client = await clientPromise;
         const db = client.db("prettyfresh");
         
@@ -17,6 +23,7 @@ export async function GET() {
             phone: user.phone || "Not Configured",
             role: user.role || "customer",
             provider: user.provider || "Email & Password",
+            walletBalance: user.walletBalance || 0,
             createdAt: user.createdAt || new Date()
         }));
         
@@ -27,8 +34,13 @@ export async function GET() {
     }
 }
 
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
     try {
+        const userPayload = await getUserFromRequest(request);
+        if (!userPayload || (userPayload.role !== "admin" && userPayload.role !== "super_admin")) {
+            return NextResponse.json({ error: "Forbidden: Admin privileges required" }, { status: 403 });
+        }
+
         const body = await request.json();
         const { id, role } = body;
         

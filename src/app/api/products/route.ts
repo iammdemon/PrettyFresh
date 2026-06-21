@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+import { getUserFromRequest } from "@/lib/auth";
 
 const SEED_PRODUCTS = [
     {
@@ -206,13 +207,18 @@ export async function GET() {
     }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
+        const userPayload = await getUserFromRequest(request);
+        if (!userPayload || (userPayload.role !== "admin" && userPayload.role !== "super_admin")) {
+            return NextResponse.json({ error: "Forbidden: Admin privileges required" }, { status: 403 });
+        }
+
         const body = await request.json();
-        const { name, category, image, variants, badge, freshness } = body;
+        const { name, category, image, variants, badge, freshness, isTopSelling } = body;
         
-        if (!name || !category || !variants || !Array.isArray(variants) || variants.length === 0) {
-            return NextResponse.json({ error: "Missing required product fields or invalid variants" }, { status: 400 });
+        if (!name || !category || !image || !variants) {
+            return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
         
         const client = await clientPromise;
@@ -221,14 +227,15 @@ export async function POST(request: Request) {
         const newProduct = {
             name,
             category,
-            image: image || "https://images.unsplash.com/photo-1610348725531-843dff14c78c?w=400&auto=format&fit=crop&q=80",
+            image,
             variants: variants.map((v: any) => ({
                 weight: v.weight,
                 price: Number(v.price),
                 discountPrice: v.discountPrice ? Number(v.discountPrice) : undefined
             })),
-            badge: badge || "Fresh",
-            freshness: freshness || "Morning Harvest",
+            badge: badge || undefined,
+            freshness: freshness || "Standard",
+            isTopSelling: isTopSelling === true,
             createdAt: new Date()
         };
         
@@ -240,10 +247,15 @@ export async function POST(request: Request) {
     }
 }
 
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
     try {
+        const userPayload = await getUserFromRequest(request);
+        if (!userPayload || (userPayload.role !== "admin" && userPayload.role !== "super_admin")) {
+            return NextResponse.json({ error: "Forbidden: Admin privileges required" }, { status: 403 });
+        }
+
         const body = await request.json();
-        const { _id, id, name, category, image, variants, badge, freshness } = body;
+        const { _id, id, name, category, image, variants, badge, freshness, isTopSelling } = body;
         
         if (!_id && id === undefined) {
             return NextResponse.json({ error: "Missing product identifier" }, { status: 400 });
@@ -270,8 +282,9 @@ export async function PUT(request: Request) {
                 discountPrice: v.discountPrice ? Number(v.discountPrice) : undefined
             }));
         }
-        if (badge) updateData.badge = badge;
-        if (freshness) updateData.freshness = freshness;
+        if (badge !== undefined) updateData.badge = badge;
+        if (freshness !== undefined) updateData.freshness = freshness;
+        if (isTopSelling !== undefined) updateData.isTopSelling = isTopSelling === true;
         
         const result = await db.collection("products").updateOne(query, { $set: updateData });
         
@@ -286,8 +299,13 @@ export async function PUT(request: Request) {
     }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
     try {
+        const userPayload = await getUserFromRequest(request);
+        if (!userPayload || (userPayload.role !== "admin" && userPayload.role !== "super_admin")) {
+            return NextResponse.json({ error: "Forbidden: Admin privileges required" }, { status: 403 });
+        }
+
         const { searchParams } = new URL(request.url);
         const _id = searchParams.get("_id");
         const id = searchParams.get("id");

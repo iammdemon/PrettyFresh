@@ -3,10 +3,12 @@
 import React, { useState, useEffect } from "react";
 import { 
     LayoutDashboard, ShoppingBag, Receipt, Users, LogOut, 
-    Plus, Trash2, Edit, TrendingUp, CheckCircle, ArrowLeft,
-    Shield, RefreshCw, X, CircleDot, AlertCircle, ShoppingCart, Award, Clock
+    Plus, Trash2, Edit, TrendingUp, CheckCircle, ArrowLeft, PieChart,
+    Shield, RefreshCw, X, CircleDot, AlertCircle, ShoppingCart, Award, Clock, DollarSign, Check, XCircle, Zap, Megaphone
 } from "lucide-react";
+import { toast } from "react-hot-toast";
 import { toBanglaNumber, toBanglaPrice } from "@/lib/bangla";
+import { useAuth } from "@/context/AuthContext";
 
 interface ProductVariant {
     weight: string;
@@ -23,6 +25,7 @@ interface Product {
     variants: ProductVariant[];
     badge?: string;
     freshness?: string;
+    isTopSelling?: boolean;
 }
 
 interface OrderItem {
@@ -46,6 +49,9 @@ interface Order {
     deliveryFee: number;
     total: number;
     status: "Pending" | "Confirmed" | "Packed" | "In Transit" | "Delivered" | "Cancelled";
+    riderId?: string;
+    riderName?: string;
+    riderPhone?: string;
     createdAt: string;
 }
 
@@ -54,8 +60,9 @@ interface UserRecord {
     name: string;
     email: string;
     phone: string;
-    role: "super_admin" | "admin" | "customer";
+    role: "super_admin" | "admin" | "rider" | "customer";
     provider: string;
+    walletBalance?: number;
     createdAt: string;
 }
 
@@ -67,7 +74,7 @@ interface Category {
 
 export default function AdminDashboard() {
     const [adminUser, setAdminUser] = useState<any>(null);
-    const [activeTab, setActiveTab] = useState<"overview" | "products" | "orders" | "users">("overview");
+    const [activeTab, setActiveTab] = useState<"overview" | "products" | "orders" | "users" | "funds" | "finance" | "bazaar" | "marketing">("overview");
     const [loading, setLoading] = useState(true);
 
     // Dynamic Lists
@@ -75,6 +82,8 @@ export default function AdminDashboard() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [users, setUsers] = useState<UserRecord[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
+    const [fundRequests, setFundRequests] = useState<any[]>([]);
+    const [financeData, setFinanceData] = useState<any>(null);
 
     // Product Modal State
     const [productModalOpen, setProductModalOpen] = useState(false);
@@ -88,34 +97,65 @@ export default function AdminDashboard() {
         image: "",
         variants: [{ weight: "1kg", price: "", discountPrice: "" }],
         badge: "",
-        freshness: "Morning Harvest"
+        freshness: "Morning Harvest",
+        isTopSelling: false
     });
 
+    // Custom Modal States
+    const [cashbackModalOpen, setCashbackModalOpen] = useState(false);
+    const [cashbackUser, setCashbackUser] = useState<{ email: string, name: string } | null>(null);
+    const [cashbackAmount, setCashbackAmount] = useState("");
+
+    const [fundConfirmModalOpen, setFundConfirmModalOpen] = useState(false);
+    const [fundConfirmData, setFundConfirmData] = useState<{ id: string, action: "approve" | "reject" } | null>(null);
+
+    const [productConfirmModalOpen, setProductConfirmModalOpen] = useState(false);
+    const [productConfirmData, setProductConfirmData] = useState<Product | null>(null);
+
+    const { user: authUser, isLoading: isAuthLoading, logout } = useAuth();
+    
     // Security Verification on Client Mount
     useEffect(() => {
-        if (typeof window !== "undefined") {
-            const saved = localStorage.getItem("prettyfresh_user");
-            if (saved) {
-                try {
-                    const parsed = JSON.parse(saved);
-                    const isAuthorized = parsed.role === "super_admin" || parsed.role === "admin";
-                    
-                    if (isAuthorized) {
-                        setAdminUser(parsed);
-                        setLoading(false);
-                    } else {
-                        // Unauthorized - redirect home
-                        alert("Access Denied: Admin privileges required.");
-                        window.location.href = "/";
-                    }
-                } catch (e) {
-                    window.location.href = "/auth";
+        if (!isAuthLoading) {
+            if (authUser) {
+                const isAuthorized = authUser.role === "super_admin" || authUser.role === "admin";
+                
+                if (isAuthorized) {
+                    setAdminUser(authUser);
+                    setLoading(false);
+                } else {
+                    // Unauthorized - redirect home
+                    toast.error("Access Denied: Admin privileges required.");
+                    window.location.href = "/";
                 }
             } else {
-                window.location.href = "/auth";
+                toast.error("Access Denied: Admin privileges required.");
+                window.location.href = "/";
             }
         }
-    }, []);
+    }, [authUser, isAuthLoading]);
+    // Load active tab data
+    useEffect(() => {
+        if (!adminUser) return;
+
+        if (activeTab === "funds") {
+            const loadFunds = async () => {
+                const resFunds = await fetch("/api/admin/funds");
+                const dataFunds = await resFunds.json();
+                if (dataFunds.success) setFundRequests(dataFunds.requests);
+            }
+            loadFunds();
+        }
+        
+        if (activeTab === "finance") {
+            const loadFinance = async () => {
+                const resFin = await fetch("/api/admin/finance");
+                const dataFin = await resFin.json();
+                if (dataFin.success) setFinanceData(dataFin.finance);
+            }
+            loadFinance();
+        }
+    }, [activeTab, adminUser]);
 
     // Load Tab Data
     useEffect(() => {
@@ -155,11 +195,8 @@ export default function AdminDashboard() {
         loadData();
     }, [loading, activeTab]);
 
-    const handleLogout = () => {
-        if (typeof window !== "undefined") {
-            localStorage.removeItem("prettyfresh_user");
-            window.location.href = "/auth";
-        }
+    const handleLogout = async () => {
+        await logout();
     };
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -178,13 +215,14 @@ export default function AdminDashboard() {
 
             const data = await res.json();
             if (data.success) {
+                toast.success("Image uploaded successfully");
                 setProdForm(prev => ({ ...prev, image: data.url }));
             } else {
-                alert("Failed to upload image: " + data.error);
+                toast.error("Failed to upload image: " + data.error);
             }
         } catch (err) {
             console.error("Image upload failed:", err);
-            alert("Image upload failed. Please try again.");
+            toast.error("Image upload failed. Please try again.");
         } finally {
             setIsUploadingImage(false);
         }
@@ -225,14 +263,15 @@ export default function AdminDashboard() {
             if (data.success) {
                 setProductModalOpen(false);
                 setEditingProduct(null);
-                setProdForm({ name: "", category: "vegetables", image: "", variants: [{ weight: "1kg", price: "", discountPrice: "" }], badge: "", freshness: "Morning Harvest" });
+                setProdForm({ name: "", category: "vegetables", image: "", variants: [{ weight: "1kg", price: "", discountPrice: "" }], badge: "", freshness: "Morning Harvest", isTopSelling: false });
                 
                 // Refresh list
                 const refreshRes = await fetch("/api/products");
                 const refreshData = await refreshRes.json();
                 if (refreshData.success) setProducts(refreshData.products);
+                toast.success(`Product ${editingProduct ? "updated" : "created"} successfully`);
             } else {
-                alert("Error: " + data.error);
+                toast.error("Error: " + data.error);
             }
         } catch (err) {
             console.error("Product submission failed:", err);
@@ -247,7 +286,8 @@ export default function AdminDashboard() {
             image: "",
             variants: [{ weight: "1kg", price: "", discountPrice: "" }],
             badge: "",
-            freshness: "Morning Harvest"
+            freshness: "Morning Harvest",
+            isTopSelling: false
         });
         setProductModalOpen(true);
     };
@@ -262,26 +302,35 @@ export default function AdminDashboard() {
                 ? prod.variants.map(v => ({ weight: v.weight, price: String(v.price), discountPrice: v.discountPrice ? String(v.discountPrice) : "" }))
                 : [{ weight: "1kg", price: "", discountPrice: "" }],
             badge: prod.badge || "",
-            freshness: prod.freshness || "Morning Harvest"
+            freshness: prod.freshness || "Morning Harvest",
+            isTopSelling: prod.isTopSelling || false
         });
         setProductModalOpen(true);
     };
 
-    const handleDeleteProduct = async (prod: Product) => {
-        if (!confirm(`Are you sure you want to delete "${prod.name}"?`)) return;
+    const confirmDeleteProduct = (prod: Product) => {
+        setProductConfirmData(prod);
+        setProductConfirmModalOpen(true);
+    };
+
+    const submitDeleteProduct = async () => {
+        if (!productConfirmData) return;
         
         try {
-            const res = await fetch(`/api/products?${prod._id ? `_id=${prod._id}` : `id=${prod.id}`}`, {
+            const res = await fetch(`/api/products?${productConfirmData._id ? `_id=${productConfirmData._id}` : `id=${productConfirmData.id}`}`, {
                 method: "DELETE"
             });
             const data = await res.json();
             if (data.success) {
-                setProducts(prev => prev.filter(p => p.id !== prod.id && p._id !== prod._id));
+                setProducts(prev => prev.filter(p => p.id !== productConfirmData.id && p._id !== productConfirmData._id));
+                toast.success("Product deleted successfully");
+                setProductConfirmModalOpen(false);
             } else {
-                alert("Failed to delete product: " + data.error);
+                toast.error("Failed to delete product: " + data.error);
             }
         } catch (err) {
             console.error("Error deleting product:", err);
+            toast.error("An error occurred");
         }
     };
 
@@ -304,15 +353,16 @@ export default function AdminDashboard() {
             });
             const data = await res.json();
             if (data.success) {
-                setCategories([...categories, data.category]);
-                setProdForm(prev => ({ ...prev, category: data.category._id }));
+                setCategories(prev => [...prev, data.category]);
+                setNewCategoryName("");
                 setCategoryModalOpen(false);
+                toast.success("Category created successfully");
             } else {
-                alert("Failed to create category: " + data.error);
+                toast.error("Failed to create category: " + data.error);
             }
         } catch (err) {
             console.error("Error creating category:", err);
-            alert("Error creating category.");
+            toast.error("Error creating category.");
         }
     };
 
@@ -327,11 +377,47 @@ export default function AdminDashboard() {
             const data = await res.json();
             if (data.success) {
                 setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status: status as any } : o));
+                toast.success(`Order marked as ${status}`);
             } else {
-                alert("Failed to update status: " + data.error);
+                toast.error("Failed to update status: " + data.error);
             }
         } catch (err) {
             console.error("Error updating order status:", err);
+        }
+    };
+
+    const handleAssignRider = async (orderId: string, riderId: string) => {
+        const rider = users.find(u => u.id === riderId);
+        if (!rider) return;
+        const currentOrder = orders.find(o => o.orderId === orderId);
+        if (!currentOrder) return;
+
+        try {
+            const res = await fetch("/api/orders", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    orderId, 
+                    status: currentOrder.status, 
+                    riderId: rider.id, 
+                    riderName: rider.name, 
+                    riderPhone: rider.phone 
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setOrders(prev => prev.map(o => o.orderId === orderId ? { 
+                    ...o, 
+                    riderId: rider.id, 
+                    riderName: rider.name, 
+                    riderPhone: rider.phone 
+                } : o));
+                toast.success(`Assigned to ${rider.name}`);
+            } else {
+                toast.error("Failed to assign rider: " + data.error);
+            }
+        } catch (err) {
+            console.error("Error assigning rider:", err);
         }
     };
 
@@ -346,11 +432,93 @@ export default function AdminDashboard() {
             const data = await res.json();
             if (data.success) {
                 setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole as any } : u));
+                toast.success("User role updated successfully");
             } else {
-                alert("Failed to change user permission: " + data.error);
+                toast.error("Failed to change user permission: " + data.error);
             }
         } catch (err) {
             console.error("Error updating user role:", err);
+        }
+    };
+
+    const openGiftCashback = (email: string, name: string) => {
+        setCashbackUser({ email, name });
+        setCashbackAmount("");
+        setCashbackModalOpen(true);
+    };
+
+    const submitGiftCashback = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!cashbackUser) return;
+        
+        const amount = Number(cashbackAmount);
+        if (isNaN(amount) || amount <= 0) {
+            toast.error("Invalid amount entered.");
+            return;
+        }
+
+        try {
+            const res = await fetch("/api/user/wallet/transaction", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: cashbackUser.email,
+                    amount,
+                    type: "cashback",
+                    description: "Gifted cashback from Administration"
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                toast.success(`Successfully gifted ${toBanglaPrice(amount)} to ${cashbackUser.name}`);
+                // Refresh list
+                const refreshRes = await fetch("/api/admin/users");
+                const refreshData = await refreshRes.json();
+                if (refreshData.success) setUsers(refreshData.users);
+                setCashbackModalOpen(false);
+            } else {
+                toast.error("Failed to gift cashback: " + data.error);
+            }
+        } catch (err) {
+            console.error("Error gifting cashback:", err);
+        }
+    };
+
+    // --- FUND REQUEST ACTIONS ---
+    const confirmFundRequestAction = (id: string, action: "approve" | "reject") => {
+        setFundConfirmData({ id, action });
+        setFundConfirmModalOpen(true);
+    };
+
+    const submitFundRequestAction = async () => {
+        if (!fundConfirmData) return;
+        
+        try {
+            const res = await fetch("/api/admin/funds", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: fundConfirmData.id, action: fundConfirmData.action })
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Refresh funds and users
+                const resFunds = await fetch("/api/admin/funds");
+                const dataFunds = await resFunds.json();
+                if (dataFunds.success) setFundRequests(dataFunds.requests);
+                
+                const resUsers = await fetch("/api/admin/users");
+                const dataUsers = await resUsers.json();
+                if (dataUsers.success) setUsers(dataUsers.users);
+                
+                toast.success(`Fund request ${fundConfirmData.action}d successfully`);
+                setFundConfirmModalOpen(false);
+            } else {
+                toast.error("Action failed: " + data.error);
+                setFundConfirmModalOpen(false);
+            }
+        } catch (err) {
+            console.error("Error updating fund request:", err);
+            toast.error("An error occurred");
         }
     };
 
@@ -427,6 +595,14 @@ export default function AdminDashboard() {
                         <span>Overview</span>
                     </button>
                     <button 
+                        onClick={() => setActiveTab("marketing")}
+                        className={`btn ${activeTab === "marketing" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ justifyContent: "flex-start", width: "100%", padding: "12px 16px" }}
+                    >
+                        <Megaphone size={18} />
+                        <span>Marketing</span>
+                    </button>
+                    <button 
                         onClick={() => setActiveTab("products")}
                         className={`btn ${activeTab === "products" ? "btn-primary" : "btn-secondary"}`}
                         style={{ justifyContent: "flex-start", width: "100%", padding: "12px 16px" }}
@@ -454,6 +630,35 @@ export default function AdminDashboard() {
                     >
                         <Users size={18} />
                         <span>Role Permissions</span>
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab("funds")}
+                        className={`btn ${activeTab === "funds" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ justifyContent: "flex-start", width: "100%", padding: "12px 16px" }}
+                    >
+                        <DollarSign size={18} />
+                        <span>Fund Requests</span>
+                        {fundRequests.length > 0 && (
+                            <span style={{ marginLeft: "auto", background: "#f57c00", color: "white", padding: "2px 8px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: 800 }}>
+                                {fundRequests.length}
+                            </span>
+                        )}
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab("finance")}
+                        className={`btn ${activeTab === "finance" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ justifyContent: "flex-start", width: "100%", padding: "12px 16px" }}
+                    >
+                        <TrendingUp size={18} />
+                        <span>Financial Overview</span>
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab("bazaar")}
+                        className={`btn ${activeTab === "bazaar" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ justifyContent: "flex-start", width: "100%", padding: "12px 16px" }}
+                    >
+                        <Zap size={18} />
+                        <span>Bazaar AI Setup</span>
                     </button>
                 </nav>
 
@@ -484,6 +689,7 @@ export default function AdminDashboard() {
                             {activeTab === "products" && "Inventory Management"}
                             {activeTab === "orders" && "Fulfillment Operations"}
                             {activeTab === "users" && "User Role Settings"}
+                            {activeTab === "funds" && "Wallet Funding Operations"}
                         </h1>
                     </div>
                     {activeTab === "products" && (
@@ -638,19 +844,26 @@ export default function AdminDashboard() {
                                                 </td>
                                                 <td style={{ padding: "12px" }}>{toBanglaNumber(weightsDisplay)}</td>
                                                 <td style={{ padding: "12px" }}>
-                                                    {p.badge && (
-                                                        <span style={{ fontSize: "0.75rem", backgroundColor: "var(--color-accent-light)", color: "var(--color-primary)", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>
-                                                            {p.badge}
-                                                        </span>
-                                                    )}
+                                                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                                                        {p.badge && (
+                                                            <span style={{ fontSize: "0.75rem", backgroundColor: "var(--color-accent-light)", color: "var(--color-primary)", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                                                                {p.badge}
+                                                            </span>
+                                                        )}
+                                                        {p.isTopSelling && (
+                                                            <span style={{ fontSize: "0.75rem", backgroundColor: "#ffebee", color: "#d32f2f", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                                                                🔥 Top
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td style={{ padding: "12px" }}>
                                                     <div style={{ display: "flex", gap: "8px" }}>
                                                         <button className="btn btn-secondary" style={{ padding: "6px" }} onClick={() => startEditProduct(p)} aria-label="Edit product">
                                                             <Edit size={14} />
                                                         </button>
-                                                        <button className="btn btn-secondary" style={{ padding: "6px", color: "#d32f2f", borderColor: "#ffcdd2" }} onClick={() => handleDeleteProduct(p)} aria-label="Delete product">
-                                                            <Trash2 size={14} />
+                                                        <button onClick={() => confirmDeleteProduct(p)} style={{ background: "none", border: 0, color: "#d32f2f", cursor: "pointer", padding: "4px" }} aria-label="Delete">
+                                                            <Trash2 size={18} />
                                                         </button>
                                                     </div>
                                                 </td>
@@ -678,6 +891,7 @@ export default function AdminDashboard() {
                                         <th style={{ padding: "12px" }}>Purchased Items</th>
                                         <th style={{ padding: "12px" }}>Total Amount</th>
                                         <th style={{ padding: "12px" }}>Status Transition</th>
+                                        <th style={{ padding: "12px" }}>Assign Rider</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -722,6 +936,26 @@ export default function AdminDashboard() {
                                                     <option value="Cancelled">Cancelled</option>
                                                 </select>
                                             </td>
+                                            <td style={{ padding: "16px 12px" }}>
+                                                <select
+                                                    value={o.riderId || ""}
+                                                    onChange={(e) => handleAssignRider(o.orderId, e.target.value)}
+                                                    style={{ 
+                                                        padding: "6px 12px", 
+                                                        borderRadius: "4px", 
+                                                        border: "1px solid var(--color-border)",
+                                                        backgroundColor: "var(--color-bg)",
+                                                        fontSize: "0.85rem",
+                                                        width: "140px"
+                                                    }}
+                                                    disabled={o.status === "Delivered" || o.status === "Cancelled"}
+                                                >
+                                                    <option value="">Unassigned</option>
+                                                    {users.filter(u => u.role === "rider").map(rider => (
+                                                        <option key={rider.id} value={rider.id}>{rider.name}</option>
+                                                    ))}
+                                                </select>
+                                            </td>
                                         </tr>
                                     ))}
                                     {orders.length === 0 && (
@@ -749,6 +983,7 @@ export default function AdminDashboard() {
                                         <th style={{ padding: "12px" }}>Customer Name</th>
                                         <th style={{ padding: "12px" }}>Email</th>
                                         <th style={{ padding: "12px" }}>Phone</th>
+                                        <th style={{ padding: "12px" }}>Wallet Balance</th>
                                         <th style={{ padding: "12px" }}>Login Method</th>
                                         <th style={{ padding: "12px" }}>Role Designation</th>
                                         <th style={{ padding: "12px" }}>Fulfillment Access</th>
@@ -762,6 +997,15 @@ export default function AdminDashboard() {
                                                 <td style={{ padding: "16px 12px", fontWeight: 700 }}>{u.name}</td>
                                                 <td style={{ padding: "16px 12px" }}>{u.email}</td>
                                                 <td style={{ padding: "16px 12px" }}>{toBanglaNumber(u.phone)}</td>
+                                                <td style={{ padding: "16px 12px", fontWeight: 700, color: "var(--color-primary)" }}>
+                                                    {toBanglaPrice(u.walletBalance || 0)}
+                                                    <button 
+                                                        onClick={() => openGiftCashback(u.email, u.name)}
+                                                        style={{ display: "block", marginTop: "8px", fontSize: "0.75rem", padding: "4px 8px", backgroundColor: "var(--color-primary-light)", color: "var(--color-primary)", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: 600 }}
+                                                    >
+                                                        + Gift Cashback
+                                                    </button>
+                                                </td>
                                                 <td style={{ padding: "16px 12px" }}>{u.provider}</td>
                                                 <td style={{ padding: "16px 12px" }}>
                                                     <span style={{ 
@@ -772,7 +1016,7 @@ export default function AdminDashboard() {
                                                         fontSize: "0.75rem",
                                                         fontWeight: 700
                                                     }}>
-                                                        {u.role === "super_admin" ? "Super Admin" : u.role === "admin" ? "Admin" : "Customer"}
+                                                        {u.role === "super_admin" ? "Super Admin" : u.role === "admin" ? "Admin" : u.role === "rider" ? "Rider" : "Customer"}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: "16px 12px" }}>
@@ -785,6 +1029,7 @@ export default function AdminDashboard() {
                                                             style={{ padding: "4px 8px", borderRadius: "4px", border: "1px solid var(--color-border)" }}
                                                         >
                                                             <option value="customer">Customer</option>
+                                                            <option value="rider">Rider</option>
                                                             <option value="admin">System Admin</option>
                                                         </select>
                                                     )}
@@ -796,6 +1041,275 @@ export default function AdminDashboard() {
                             </table>
                         </div>
 
+                    </div>
+                )}
+
+                {activeTab === "funds" && (
+                    <div style={{ backgroundColor: "var(--color-white)", padding: "24px", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-sm)" }}>
+                        <h2 style={{ fontSize: "1.2rem", marginBottom: "20px" }}>Pending bKash Deposits</h2>
+                        <div style={{ overflowX: "auto" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.9rem" }}>
+                                <thead>
+                                    <tr style={{ borderBottom: "2px solid var(--color-border)", color: "var(--color-text-muted)" }}>
+                                        <th style={{ padding: "12px" }}>Date</th>
+                                        <th style={{ padding: "12px" }}>Customer</th>
+                                        <th style={{ padding: "12px" }}>bKash Number</th>
+                                        <th style={{ padding: "12px" }}>TrxID</th>
+                                        <th style={{ padding: "12px" }}>Amount</th>
+                                        <th style={{ padding: "12px" }}>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {fundRequests.length > 0 ? fundRequests.map((req, idx) => (
+                                        <tr key={idx} style={{ borderBottom: "1px solid var(--color-border)" }}>
+                                            <td style={{ padding: "16px 12px" }}>{new Date(req.createdAt).toLocaleDateString()}</td>
+                                            <td style={{ padding: "16px 12px", fontWeight: 600 }}>{req.userName}<br/><span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>{req.userEmail}</span></td>
+                                            <td style={{ padding: "16px 12px" }}>{req.accountNumber}</td>
+                                            <td style={{ padding: "16px 12px", fontFamily: "monospace", letterSpacing: "1px" }}>{req.trxId}</td>
+                                            <td style={{ padding: "16px 12px", fontWeight: 700, color: "var(--color-primary)" }}>{toBanglaPrice(req.amount)}</td>
+                                            <td style={{ padding: "16px 12px" }}>
+                                                <div style={{ display: "flex", gap: "8px" }}>
+                                                    <button 
+                                                        onClick={() => confirmFundRequestAction(req.id, "approve")}
+                                                        style={{ padding: "6px 12px", backgroundColor: "var(--color-primary-light)", color: "var(--color-primary)", border: "none", borderRadius: "4px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontWeight: 600 }}
+                                                    >
+                                                        <Check size={14} /> Approve
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => confirmFundRequestAction(req.id, "reject")}
+                                                        style={{ padding: "6px 12px", backgroundColor: "#ffcdd2", color: "#d32f2f", border: "none", borderRadius: "4px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontWeight: 600 }}
+                                                    >
+                                                        <XCircle size={14} /> Reject
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={6} style={{ padding: "40px", textAlign: "center", color: "var(--color-text-muted)" }}>
+                                                No pending fund requests.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === "finance" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <h2 style={{ fontSize: "1.5rem", fontWeight: 800, margin: 0 }}>Financial Overview</h2>
+                        </div>
+                        
+                        {financeData ? (
+                            <>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
+                                    <div style={{ backgroundColor: "var(--color-white)", padding: "24px", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-sm)", display: "flex", alignItems: "center", gap: "16px" }}>
+                                        <div style={{ width: "56px", height: "56px", borderRadius: "12px", backgroundColor: "var(--color-primary-light)", color: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                            <DollarSign size={28} />
+                                        </div>
+                                        <div>
+                                            <div style={{ color: "var(--color-text-muted)", fontSize: "0.9rem", fontWeight: 600, marginBottom: "4px" }}>Total Cash Collected (Riders)</div>
+                                            <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "var(--color-primary)" }}>{toBanglaPrice(financeData.totalCashCollected)}</div>
+                                        </div>
+                                    </div>
+                                    <div style={{ backgroundColor: "var(--color-white)", padding: "24px", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-sm)", display: "flex", alignItems: "center", gap: "16px" }}>
+                                        <div style={{ width: "56px", height: "56px", borderRadius: "12px", backgroundColor: "#e3f2fd", color: "#1976d2", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                                        </div>
+                                        <div>
+                                            <div style={{ color: "var(--color-text-muted)", fontSize: "0.9rem", fontWeight: 600, marginBottom: "4px" }}>Total bKash Deposits</div>
+                                            <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1976d2" }}>{toBanglaPrice(financeData.totalBkashDeposits)}</div>
+                                        </div>
+                                    </div>
+                                    <div style={{ backgroundColor: "var(--color-white)", padding: "24px", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-sm)", display: "flex", alignItems: "center", gap: "16px" }}>
+                                        <div style={{ width: "56px", height: "56px", borderRadius: "12px", backgroundColor: "#fff3e0", color: "#f57c00", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                            <PieChart size={28} />
+                                        </div>
+                                        <div>
+                                            <div style={{ color: "var(--color-text-muted)", fontSize: "0.9rem", fontWeight: 600, marginBottom: "4px" }}>Grand Total Revenue</div>
+                                            <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#f57c00" }}>{toBanglaPrice(financeData.grandTotalRevenue)}</div>
+                                        </div>
+                                    </div>
+                                    <div style={{ backgroundColor: "var(--color-white)", padding: "24px", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-sm)", display: "flex", alignItems: "center", gap: "16px" }}>
+                                        <div style={{ width: "56px", height: "56px", borderRadius: "12px", backgroundColor: "#fce4ec", color: "#d81b60", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                            <AlertCircle size={28} />
+                                        </div>
+                                        <div>
+                                            <div style={{ color: "var(--color-text-muted)", fontSize: "0.9rem", fontWeight: 600, marginBottom: "4px" }}>Outstanding Wallet Liability</div>
+                                            <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#d81b60" }}>{toBanglaPrice(financeData.totalWalletBalances)}</div>
+                                            <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)", marginTop: "4px" }}>Customer balances available to spend</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style={{ marginTop: "24px", backgroundColor: "var(--color-white)", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-sm)", overflow: "hidden" }}>
+                                    <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--color-border)", backgroundColor: "var(--color-bg)" }}>
+                                        <h3 style={{ margin: 0, fontSize: "1.1rem" }}>Recent Financial Transactions</h3>
+                                    </div>
+                                    <div style={{ overflowX: "auto" }}>
+                                        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                                            <thead>
+                                                <tr style={{ backgroundColor: "var(--color-bg)", borderBottom: "2px solid var(--color-border)", fontSize: "0.85rem", color: "var(--color-text-muted)", textTransform: "uppercase" }}>
+                                                    <th style={{ padding: "16px 24px", fontWeight: 600 }}>Date</th>
+                                                    <th style={{ padding: "16px 24px", fontWeight: 600 }}>Type</th>
+                                                    <th style={{ padding: "16px 24px", fontWeight: 600 }}>Customer</th>
+                                                    <th style={{ padding: "16px 24px", fontWeight: 600 }}>Reference</th>
+                                                    <th style={{ padding: "16px 24px", fontWeight: 600, textAlign: "right" }}>Amount</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {financeData.recentTransactions && financeData.recentTransactions.length > 0 ? financeData.recentTransactions.map((tx: any) => (
+                                                    <tr key={tx.id} style={{ borderBottom: "1px solid var(--color-border)" }}>
+                                                        <td style={{ padding: "16px 24px", fontSize: "0.9rem" }}>{new Date(tx.date).toLocaleString()}</td>
+                                                        <td style={{ padding: "16px 24px" }}>
+                                                            <span style={{ 
+                                                                padding: "4px 8px", 
+                                                                borderRadius: "12px", 
+                                                                fontSize: "0.75rem", 
+                                                                fontWeight: 700,
+                                                                backgroundColor: tx.isCredit ? "#e8f5e9" : "#ffebee",
+                                                                color: tx.isCredit ? "#2e7d32" : "#c62828"
+                                                            }}>
+                                                                {tx.type}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ padding: "16px 24px", fontSize: "0.9rem", color: "var(--color-text-muted)" }}>{tx.customer}</td>
+                                                        <td style={{ padding: "16px 24px", fontSize: "0.85rem", fontFamily: "monospace" }}>{tx.reference}</td>
+                                                        <td style={{ padding: "16px 24px", fontWeight: 800, textAlign: "right", color: tx.isCredit ? "#2e7d32" : "#c62828" }}>
+                                                            {tx.isCredit ? "+" : "-"}{toBanglaPrice(tx.amount)}
+                                                        </td>
+                                                    </tr>
+                                                )) : (
+                                                    <tr>
+                                                        <td colSpan={5} style={{ padding: "40px", textAlign: "center", color: "var(--color-text-muted)" }}>
+                                                            No transactions found.
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div style={{ padding: "40px", textAlign: "center", color: "var(--color-text-muted)", backgroundColor: "var(--color-white)", borderRadius: "var(--radius-md)" }}>
+                                Loading financial data...
+                            </div>
+                        )}
+                    </div>
+                )}
+                {activeTab === "bazaar" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <h2 style={{ fontSize: "1.5rem", fontWeight: 800, margin: 0 }}>Bazaar AI Setup</h2>
+                        </div>
+                        
+                        <div style={{ backgroundColor: "var(--color-white)", padding: "40px", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", textAlign: "center", boxShadow: "var(--shadow-sm)" }}>
+                            <div style={{ width: "64px", height: "64px", borderRadius: "50%", backgroundColor: "var(--color-primary-light)", color: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+                                <Zap size={32} />
+                            </div>
+                            <h3 style={{ fontSize: "1.3rem", fontWeight: 700, marginBottom: "12px" }}>AI OCR & Product Matching</h3>
+                            <p style={{ color: "var(--color-text-muted)", maxWidth: "600px", margin: "0 auto 24px" }}>
+                                The Monthly Bazaar Builder is powered by the OpenRouter API. To enable handwritten list parsing, make sure your <code style={{ backgroundColor: "var(--color-bg)", padding: "4px 8px", borderRadius: "4px" }}>OPENROUTER_API_KEY</code> is configured in your environment variables.
+                            </p>
+                            <div style={{ display: "flex", justifyContent: "center", gap: "16px" }}>
+                                <div style={{ padding: "20px", backgroundColor: "var(--color-bg)", borderRadius: "var(--radius-md)", minWidth: "200px" }}>
+                                    <div style={{ fontSize: "2rem", fontWeight: 800, color: "var(--color-primary)", marginBottom: "8px" }}>Active</div>
+                                    <div style={{ fontSize: "0.9rem", color: "var(--color-text-muted)", fontWeight: 600 }}>OCR Engine Status</div>
+                                </div>
+                                <div style={{ padding: "20px", backgroundColor: "var(--color-bg)", borderRadius: "var(--radius-md)", minWidth: "200px" }}>
+                                    <div style={{ fontSize: "2rem", fontWeight: 800, color: "var(--color-primary)", marginBottom: "8px" }}>--</div>
+                                    <div style={{ fontSize: "0.9rem", color: "var(--color-text-muted)", fontWeight: 600 }}>Total Active Subscriptions</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === "marketing" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <h2 style={{ fontSize: "1.5rem", fontWeight: 800, margin: 0 }}>Push Notifications</h2>
+                        </div>
+                        
+                        <div style={{ backgroundColor: "var(--color-white)", padding: "40px", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-sm)", maxWidth: "800px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "32px" }}>
+                                <div style={{ width: "48px", height: "48px", borderRadius: "50%", backgroundColor: "var(--color-primary-light)", color: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <Megaphone size={24} />
+                                </div>
+                                <div>
+                                    <h3 style={{ fontSize: "1.2rem", fontWeight: 700, margin: 0 }}>Send Marketing Broadcast</h3>
+                                    <p style={{ color: "var(--color-text-muted)", margin: "4px 0 0 0", fontSize: "0.9rem" }}>
+                                        Push messages instantly to all users with the app installed.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <form onSubmit={async (e) => {
+                                e.preventDefault();
+                                const form = e.target as HTMLFormElement;
+                                const title = (form.elements.namedItem("title") as HTMLInputElement).value;
+                                const message = (form.elements.namedItem("message") as HTMLTextAreaElement).value;
+                                
+                                const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+                                submitBtn.disabled = true;
+                                submitBtn.innerText = "Sending...";
+                                
+                                try {
+                                    const res = await fetch("/api/admin/notifications/send", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ title, message })
+                                    });
+                                    const data = await res.json();
+                                    
+                                    if (data.success) {
+                                        if (data.message) {
+                                            toast.success(data.message);
+                                        } else {
+                                            toast.success(`Sent to ${data.sent} devices! (${data.failed} failed)`);
+                                        }
+                                        form.reset();
+                                    } else {
+                                        toast.error(data.error || data.message || "Failed to send push notification.");
+                                    }
+                                } catch (err) {
+                                    toast.error("Network error sending notification.");
+                                } finally {
+                                    submitBtn.disabled = false;
+                                    submitBtn.innerText = "Broadcast Message";
+                                }
+                            }} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                                <div className="input-field">
+                                    <label style={{ fontWeight: 600, fontSize: "0.9rem", marginBottom: "8px", display: "block" }}>Notification Title</label>
+                                    <input 
+                                        type="text" 
+                                        name="title"
+                                        placeholder="e.g. 🚨 Weekend Flash Sale!" 
+                                        required
+                                        style={{ width: "100%", padding: "12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)", fontSize: "1rem" }}
+                                    />
+                                </div>
+                                
+                                <div className="input-field">
+                                    <label style={{ fontWeight: 600, fontSize: "0.9rem", marginBottom: "8px", display: "block" }}>Message Body</label>
+                                    <textarea 
+                                        name="message"
+                                        placeholder="e.g. Get 20% off all fresh fruits this weekend only. Tap to shop now!" 
+                                        required
+                                        rows={4}
+                                        style={{ width: "100%", padding: "12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)", fontSize: "1rem", resize: "vertical" }}
+                                    />
+                                </div>
+                                
+                                <button type="submit" className="btn btn-primary" style={{ padding: "14px", fontSize: "1rem", marginTop: "8px", display: "flex", justifyContent: "center", gap: "8px" }}>
+                                    <Megaphone size={18} /> Broadcast Message
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 )}
 
@@ -970,6 +1484,19 @@ export default function AdminDashboard() {
                                 </div>
                             </div>
 
+                            <div className="input-field" style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px", padding: "12px", backgroundColor: "var(--color-bg)", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)" }}>
+                                <input 
+                                    type="checkbox" 
+                                    id="isTopSelling"
+                                    checked={prodForm.isTopSelling}
+                                    onChange={(e) => setProdForm(prev => ({ ...prev, isTopSelling: e.target.checked }))}
+                                    style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "var(--color-primary)" }}
+                                />
+                                <label htmlFor="isTopSelling" style={{ fontWeight: 600, fontSize: "0.85rem", cursor: "pointer", userSelect: "none", margin: 0 }}>
+                                    🔥 Mark as Top Selling Product (Overrides Auto-calculation)
+                                </label>
+                            </div>
+
                             <button 
                                 type="submit" 
                                 className="btn btn-primary" 
@@ -1030,6 +1557,158 @@ export default function AdminDashboard() {
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* --- CASHBACK GIFT MODAL --- */}
+            {cashbackModalOpen && cashbackUser && (
+                <div style={{
+                    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: "rgba(0,0,0,0.5)", display: "flex",
+                    alignItems: "center", justifyContent: "center",
+                    zIndex: 250, backdropFilter: "blur(4px)"
+                }}>
+                    <div style={{
+                        backgroundColor: "var(--color-white)", borderRadius: "var(--radius-lg)",
+                        width: "400px", maxWidth: "90%", padding: "32px",
+                        boxShadow: "var(--shadow-lg)", position: "relative"
+                    }}>
+                        <button 
+                            onClick={() => setCashbackModalOpen(false)}
+                            style={{ position: "absolute", right: "20px", top: "20px", background: "none", border: 0, cursor: "pointer", color: "var(--color-text-muted)" }}
+                        >
+                            <X size={20} />
+                        </button>
+                        
+                        <h3 style={{ fontSize: "1.2rem", marginBottom: "8px" }}>Gift Cashback</h3>
+                        <p style={{ fontSize: "0.9rem", color: "var(--color-text-muted)", marginBottom: "20px" }}>
+                            Send promotional funds to <strong style={{ color: "var(--color-text)" }}>{cashbackUser.name}</strong>.
+                        </p>
+                        
+                        <form onSubmit={submitGiftCashback} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                            <div className="input-field">
+                                <label style={{ fontWeight: 600, fontSize: "0.85rem", marginBottom: "6px", display: "block" }}>Amount (৳)</label>
+                                <input 
+                                    type="number" 
+                                    value={cashbackAmount}
+                                    onChange={(e) => setCashbackAmount(e.target.value)}
+                                    placeholder="e.g. 50"
+                                    min="1"
+                                    required 
+                                    style={{ width: "100%", padding: "10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)" }}
+                                    autoFocus
+                                />
+                            </div>
+                            <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+                                <button type="button" onClick={() => setCashbackModalOpen(false)} className="btn btn-secondary" style={{ flex: 1, padding: "10px" }}>
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn btn-primary" style={{ flex: 1, padding: "10px" }}>
+                                    Send Funds
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* --- FUND ACTION CONFIRMATION MODAL --- */}
+            {fundConfirmModalOpen && fundConfirmData && (
+                <div style={{
+                    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: "rgba(0,0,0,0.5)", display: "flex",
+                    alignItems: "center", justifyContent: "center",
+                    zIndex: 250, backdropFilter: "blur(4px)"
+                }}>
+                    <div style={{
+                        backgroundColor: "var(--color-white)", borderRadius: "var(--radius-lg)",
+                        width: "400px", maxWidth: "90%", padding: "32px",
+                        boxShadow: "var(--shadow-lg)", position: "relative"
+                    }}>
+                        <div style={{
+                            width: "48px", height: "48px", borderRadius: "50%", 
+                            backgroundColor: fundConfirmData.action === "approve" ? "#e8f5e9" : "#ffebee", 
+                            color: fundConfirmData.action === "approve" ? "#2e7d32" : "#c62828",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            marginBottom: "16px"
+                        }}>
+                            {fundConfirmData.action === "approve" ? <Check size={24} /> : <XCircle size={24} />}
+                        </div>
+                        
+                        <h3 style={{ fontSize: "1.2rem", marginBottom: "12px" }}>
+                            Confirm {fundConfirmData.action === "approve" ? "Approval" : "Rejection"}
+                        </h3>
+                        <p style={{ fontSize: "0.95rem", color: "var(--color-text-muted)", marginBottom: "24px", lineHeight: 1.5 }}>
+                            Are you sure you want to {fundConfirmData.action} this bKash deposit request? 
+                            {fundConfirmData.action === "approve" && " This will instantly add the funds to the customer's wallet balance."}
+                        </p>
+                        
+                        <div style={{ display: "flex", gap: "12px" }}>
+                            <button onClick={() => setFundConfirmModalOpen(false)} className="btn btn-secondary" style={{ flex: 1, padding: "10px" }}>
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={submitFundRequestAction} 
+                                className="btn" 
+                                style={{ 
+                                    flex: 1, padding: "10px", 
+                                    backgroundColor: fundConfirmData.action === "approve" ? "#2e7d32" : "#c62828", 
+                                    color: "white" 
+                                }}
+                            >
+                                Yes, {fundConfirmData.action}
+                            </button>
+                        </div>
+                    </div>
+                    {/* --- PRODUCT DELETION CONFIRMATION MODAL --- */}
+            {productConfirmModalOpen && productConfirmData && (
+                <div style={{
+                    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: "rgba(0,0,0,0.5)", display: "flex",
+                    alignItems: "center", justifyContent: "center",
+                    zIndex: 250, backdropFilter: "blur(4px)"
+                }}>
+                    <div style={{
+                        backgroundColor: "var(--color-white)", borderRadius: "var(--radius-lg)",
+                        width: "400px", maxWidth: "90%", padding: "32px",
+                        boxShadow: "var(--shadow-lg)", position: "relative"
+                    }}>
+                        <div style={{
+                            width: "48px", height: "48px", borderRadius: "50%", 
+                            backgroundColor: "#ffebee", color: "#c62828",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            marginBottom: "16px"
+                        }}>
+                            <Trash2 size={24} />
+                        </div>
+                        
+                        <h3 style={{ fontSize: "1.2rem", marginBottom: "12px" }}>
+                            Delete Product
+                        </h3>
+                        <p style={{ fontSize: "0.95rem", color: "var(--color-text-muted)", marginBottom: "24px", lineHeight: 1.5 }}>
+                            Are you sure you want to delete <strong style={{ color: "var(--color-text)" }}>"{productConfirmData.name}"</strong>? This action cannot be undone.
+                        </p>
+                        
+                        <div style={{ display: "flex", gap: "12px" }}>
+                            <button onClick={() => setProductConfirmModalOpen(false)} className="btn btn-secondary" style={{ flex: 1, padding: "10px" }}>
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={submitDeleteProduct} 
+                                className="btn" 
+                                style={{ 
+                                    flex: 1, padding: "10px", 
+                                    backgroundColor: "#c62828", 
+                                    color: "white" 
+                                }}
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+        </div>
             )}
 
         </div>

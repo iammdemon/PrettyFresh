@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+import { getUserFromRequest } from "@/lib/auth";
 
 const DEFAULT_CATEGORIES = [
     { name: "Vegetables", code: "vegetables" },
@@ -29,8 +30,13 @@ export async function GET() {
     }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
+        const userPayload = await getUserFromRequest(request);
+        if (!userPayload || (userPayload.role !== "admin" && userPayload.role !== "super_admin")) {
+            return NextResponse.json({ error: "Forbidden: Admin privileges required" }, { status: 403 });
+        }
+
         const body = await request.json();
         const { name } = body;
         

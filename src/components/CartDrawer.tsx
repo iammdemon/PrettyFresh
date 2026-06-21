@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { X, ShoppingBasket, Trash2, CreditCard } from "lucide-react";
 import { toBanglaPrice, toBanglaNumber } from "@/lib/bangla";
 import { useRouter } from "next/navigation";
@@ -36,17 +37,16 @@ export const CartDrawer: React.FC = () => {
         }
     };
 
+    const { user } = useAuth();
+
     const handleProceedCheckout = () => {
-        if (typeof window !== "undefined") {
-            const saved = localStorage.getItem("prettyfresh_user");
-            if (saved) {
-                setCartOpen(false);
-                router.push("/checkout");
-            } else {
-                setCartOpen(false);
-                triggerToast("Please login or create an account to place an order.");
-                router.push("/auth");
-            }
+        if (user) {
+            setCartOpen(false);
+            router.push("/checkout");
+        } else {
+            setCartOpen(false);
+            triggerToast("Please login or create an account to place an order.");
+            router.push("/auth");
         }
     };
 

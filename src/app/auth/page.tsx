@@ -5,6 +5,7 @@ import {
     LoginScreen, OtpScreen, RegisterScreen, 
     CompleteProfileScreen, AddressSetupScreen, ForgotLoginScreen, AccountSuccessScreen 
 } from "@/components/AuthScreens";
+import { useAuth } from "@/context/AuthContext";
 
 type AuthScreenState = "login" | "otp" | "register" | "profile" | "address" | "forgot" | "success";
 
@@ -53,6 +54,8 @@ export default function AuthPage() {
         }
     };
 
+    const { login } = useAuth();
+
     const handleLoginContinue = (phone: string) => {
         setMobileNumber(phone);
         // OTP is disabled, so mobile login proceeds directly to register (as a new flow)
@@ -60,11 +63,14 @@ export default function AuthPage() {
     };
 
     const handleLoginSuccess = (userData: any) => {
-        if (typeof window !== "undefined") {
-            localStorage.setItem("prettyfresh_user", JSON.stringify(userData));
+        login(userData);
+        
+        // Onboarding Check
+        if (!userData.phone || userData.phone === "" || !userData.address || userData.address === "Not Provided") {
+            window.location.href = "/onboarding";
+        } else {
+            window.location.href = "/dashboard";
         }
-        // Redirect directly to the dashboard
-        window.location.href = "/dashboard";
     };
 
     const handleForgotContinue = (phone: string) => {
@@ -109,10 +115,7 @@ export default function AuthPage() {
             provider: "Email & Password",
             role: "customer"
         };
-        
-        if (typeof window !== "undefined") {
-            localStorage.setItem("prettyfresh_user", JSON.stringify(userData));
-        }
+        login(userData);
 
         try {
             await fetch("/api/user/profile", {
@@ -187,9 +190,7 @@ export default function AuthPage() {
                                 provider: "Email & Password",
                                 role: "customer"
                             };
-                            if (typeof window !== "undefined") {
-                                localStorage.setItem("prettyfresh_user", JSON.stringify(userData));
-                            }
+                            login(userData);
                             try {
                                 await fetch("/api/user/profile", {
                                     method: "POST",

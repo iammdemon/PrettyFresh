@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Outfit, Inter } from "next/font/google";
 import { CartProvider } from "@/context/CartContext";
+import { AuthProvider } from "@/context/AuthContext";
 import NextTopLoader from 'nextjs-toploader';
+import { Toaster } from 'react-hot-toast';
 import "./globals.css";
 
 const outfit = Outfit({
@@ -30,9 +32,12 @@ export default function RootLayout({
     <html lang="en" className={`${outfit.variable} ${inter.variable}`}>
       <body style={{ fontFamily: "var(--font-inter), sans-serif" }}>
         <NextTopLoader color="var(--color-primary)" showSpinner={false} />
-        <CartProvider>
-          {children}
-        </CartProvider>
+        <Toaster position="top-center" />
+        <AuthProvider>
+          <CartProvider>
+            {children}
+          </CartProvider>
+        </AuthProvider>
       </body>
     </html>
   );

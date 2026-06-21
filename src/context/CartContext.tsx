@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { toBanglaPrice } from "@/lib/bangla";
+import { useAuth } from "@/context/AuthContext";
 
 export interface CartItem {
     id: string;
@@ -49,12 +50,13 @@ interface CartContextType {
     updateQuantity: (index: number, delta: number) => void;
     removeItem: (index: number) => void;
     toggleWishlist: (id: string) => void;
-    checkout: (address: string, phone: string) => Promise<string>;
+    checkout: (address: string, phone: string, paymentMethod: string) => Promise<string>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { user } = useAuth();
     const [cart, setCart] = useState<CartItem[]>([]);
     const [wishlist, setWishlist] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -140,7 +142,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
-    const checkout = async (address: string, phone: string): Promise<string> => {
+    const checkout = async (address: string, phone: string, paymentMethod: string): Promise<string> => {
         if (cart.length === 0) return "";
         
         const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -150,15 +152,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSuccessTotal(toBanglaPrice(total));
         setSuccessOrderId(orderId);
         
-        let user: any = null;
-        if (typeof window !== "undefined") {
-            const saved = localStorage.getItem("prettyfresh_user");
-            if (saved) {
-                try {
-                    user = JSON.parse(saved);
-                } catch (e) {}
-            }
-        }
+        // User is already coming from useAuth
         
         const orderData = {
             orderId,
@@ -170,7 +164,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             subtotal,
             deliveryFee: 2.00,
             total,
-            status: "Pending"
+            status: "Pending",
+            paymentMethod: paymentMethod
         };
         
         try {

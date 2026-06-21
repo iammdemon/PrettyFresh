@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { Leaf, MapPin, Grid, ChevronDown, Search, X, User, ShoppingCart, ShieldCheck } from "lucide-react";
 import { toBanglaPrice } from "@/lib/bangla";
 
@@ -20,18 +21,7 @@ export const Header: React.FC = () => {
     const [locationMenuOpen, setLocationMenuOpen] = useState(false);
     const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
     const [scrolled, setScrolled] = useState(false);
-    const [user, setUser] = useState<any>(null);
-
-    useEffect(() => {
-        if (typeof window !== "undefined") {
-            const saved = localStorage.getItem("prettyfresh_user");
-            if (saved) {
-                try {
-                    setUser(JSON.parse(saved));
-                } catch (e) {}
-            }
-        }
-    }, []);
+    const { user } = useAuth();
 
     // Track scroll event to change style
     useEffect(() => {
@@ -80,39 +70,6 @@ export const Header: React.FC = () => {
                     <span className="logo-text">Pretty<span>Fresh</span></span>
                 </a>
 
-                {/* Delivery Location */}
-                <div 
-                    className={`location-selector ${locationMenuOpen ? "active" : ""}`} 
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        setLocationMenuOpen(!locationMenuOpen);
-                        setCategoryMenuOpen(false);
-                    }}
-                >
-                    <MapPin className="icon-green" />
-                    <div className="location-info">
-                        <span className="location-label">Deliver to</span>
-                        <span className="location-value">{currentLocation}</span>
-                    </div>
-                    <ChevronDown className="chevron" />
-                    
-                    {/* Location Dropdown */}
-                    <div className="location-dropdown">
-                        <ul>
-                            {["Dhaka, Banani", "Dhaka, Gulshan", "Dhaka, Dhanmondi", "Dhaka, Uttara"].map(loc => (
-                                <li 
-                                    key={loc} 
-                                    onClick={() => {
-                                        setCurrentLocation(loc);
-                                        setLocationMenuOpen(false);
-                                    }}
-                                >
-                                    {loc}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                </div>
 
                 {/* Categories Dropdown Trigger */}
                 <div className={`categories-dropdown-container ${categoryMenuOpen ? "active" : ""}`}>
