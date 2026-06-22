@@ -136,14 +136,21 @@ const SEED_PRODUCTS = [
     }
 ];
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         const client = await clientPromise;
         const db = client.db("prettyfresh");
         
+        const { searchParams } = new URL(request.url);
+        const page = parseInt(searchParams.get("page") || "1");
+        const limit = parseInt(searchParams.get("limit") || "0");
+        const category = searchParams.get("category");
+        const search = searchParams.get("search");
+        const isBazaar = searchParams.get("isBazaar");
+        
         let products = await db.collection("products").find({}).toArray();
         
-        // Auto-migration: if old schema detected (price field exists directly on product without variants), drop and reseed.
+        // Auto-migration
         if (products.length > 0 && products[0].price !== undefined && !products[0].variants) {
             await db.collection("products").deleteMany({});
             products = [];
@@ -172,11 +179,9 @@ export async function GET() {
                 };
             });
             await db.collection("products").insertMany(seededProducts);
-            products = await db.collection("products").find({}).toArray();
         } else {
             let needsMigration = false;
             for (const p of products) {
-                // If the category field matches a known old code and is not an ObjectId string length
                 if (p.category && p.category.length < 24) {
                     const matchedCat = categories.find(c => c.code === p.category);
                     if (matchedCat) {
@@ -196,11 +201,55 @@ export async function GET() {
                         );
                     }
                 }
-                products = await db.collection("products").find({}).toArray();
             }
         }
         
-        return NextResponse.json({ success: true, products });
+        // Build Query
+        const query: any = {};
+        
+        if (search) {
+            query.name = { $regex: search, $options: "i" };
+        }
+        
+        if (category && category !== 'all') {
+            query.category = category;
+        }
+
+        if (isBazaar === 'true') {
+            const bazaarCat = categories.find(c => c.code === 'daily-bazaar');
+            if (bazaarCat) {
+                query.category = bazaarCat._id.toString();
+            }
+        } else if (isBazaar === 'false') {
+            const bazaarCat = categories.find(c => c.code === 'daily-bazaar');
+            if (bazaarCat) {
+                if (query.category) {
+                    if (query.category === bazaarCat._id.toString()) {
+                        query.category = "none";
+                    }
+                } else {
+                    query.category = { $ne: bazaarCat._id.toString() };
+                }
+            }
+        }
+
+        let cursor = db.collection("products").find(query);
+        const totalCount = await db.collection("products").countDocuments(query);
+        
+        if (limit > 0) {
+            cursor = cursor.skip((page - 1) * limit).limit(limit);
+        }
+        
+        const paginatedProducts = await cursor.toArray();
+        const hasMore = limit > 0 ? (page * limit) < totalCount : false;
+        
+        return NextResponse.json({ 
+            success: true, 
+            products: paginatedProducts,
+            totalCount,
+            page,
+            hasMore
+        });
     } catch (e: any) {
         console.error("GET Products Error:", e);
         return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 });
