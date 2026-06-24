@@ -140,12 +140,7 @@ export default function CustomerDashboard() {
                     height: "70px" 
                 }}>
                     <a href="/" className="logo" style={{ fontSize: "1.35rem" }}>
-                        <span className="logo-icon" style={{ width: "32px", height: "32px", borderRadius: "8px" }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                            </svg>
-                        </span>
-                        <span className="logo-text">Pretty<span>Fresh</span></span>
+                        <img src="/logo.png" alt="TAZA Logo" height="32" style={{ maxHeight: "32px", width: "auto" }} />
                     </a>
                     
                     <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>

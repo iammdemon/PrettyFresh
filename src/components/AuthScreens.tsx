@@ -39,8 +39,7 @@ export const WelcomeScreen: React.FC<WelcomeProps> = ({ onNavigate }) => {
     return (
         <div className="fade-transition" style={{ textAlign: "center" }}>
             <div className="logo" style={{ justifyContent: "center", marginBottom: "32px" }}>
-                <span className="logo-icon"><Leaf fill="currentColor" /></span>
-                <span className="logo-text">Pretty<span>Fresh</span></span>
+                <img src="/logo.png" alt="TAZA Logo" height="32" style={{ maxHeight: "32px", width: "auto" }} />
             </div>
             
             <div style={{ position: "relative", width: "100%", height: "200px", marginBottom: "32px" }}>
@@ -233,8 +232,7 @@ export const LoginScreen: React.FC<LoginProps> = ({ onBack, onNext, onLoginSucce
                     <ArrowLeft size={18} />
                 </button>
                 <div className="logo" style={{ fontSize: "1.25rem" }}>
-                    <span className="logo-icon" style={{ width: "32px", height: "32px" }}><Leaf fill="currentColor" size={16} /></span>
-                    <span className="logo-text">Pretty<span>Fresh</span></span>
+                    <img src="/logo.png" alt="TAZA Logo" height="32" style={{ maxHeight: "32px", width: "auto" }} />
                 </div>
             </div>
 

@@ -66,8 +66,7 @@ export const Header: React.FC = () => {
             <div className="header-container">
                 {/* Logo */}
                 <a href="#" className="logo" aria-label="PrettyFresh Home">
-                    <span className="logo-icon"><Leaf fill="currentColor" /></span>
-                    <span className="logo-text">Pretty<span>Fresh</span></span>
+                    <img src="/logo.png" alt="TAZA Logo" height="32" style={{ maxHeight: "32px", width: "auto" }} />
                 </a>
 
 

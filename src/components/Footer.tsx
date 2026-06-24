@@ -10,8 +10,7 @@ export const Footer: React.FC = () => {
                 <div className="footer-top">
                     <div className="footer-brand">
                         <a href="#" className="logo footer-logo">
-                            <span className="logo-icon"><Leaf fill="currentColor" /></span>
-                            <span className="logo-text">Pretty<span>Fresh</span></span>
+                            <img src="/logo.png" alt="TAZA Logo" height="32" style={{ maxHeight: "32px", width: "auto" }} />
                         </a>
                         <p className="footer-about">
                             PrettyFresh is Dhaka's premier online grocery and fresh vegetable marketplace. Sourced directly from organic farms, packed sanitarily, and delivered within 60 minutes.
